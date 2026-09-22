@@ -10,17 +10,36 @@
 //   localStorage. Nothing is sent anywhere.
 
 const STORE_KEY = 'signal:v1';
+// theme.js loads first (see index.html) and applies your saved colors.
+const Theme = window.SignalTheme;
 const PAGE_SIZE = 40;
 const DAY = 86_400_000;
 const ID_RE = /^[a-f0-9]{16}$/;
 
-const NOTE_PROMPTS = [
-  'Key takeaway: ',
-  'How this applies to my work: ',
-  'Term to look up: ',
-  'Question to explore: ',
-  'How I would detect or prevent this: ',
-];
+// Starter prompts for notes, tuned to each section.
+const NOTE_PROMPTS = {
+  security: [
+    'Key takeaway: ',
+    'How this applies to my work: ',
+    'Term to look up: ',
+    'Question to explore: ',
+    'How I would detect or prevent this: ',
+  ],
+  music: [
+    'Key takeaway: ',
+    'Technique to try: ',
+    'Gear or plugin to check out: ',
+    'Theory idea to practice: ',
+    'Track to reference: ',
+  ],
+  games: [
+    'Key takeaway: ',
+    'Design idea to borrow: ',
+    'How this could be exploited: ',
+    'Technique to try: ',
+    'Game to play: ',
+  ],
+};
 
 // ---------- DOM helpers ----------
 
@@ -81,7 +100,7 @@ function toast(message) {
 // ---------- Persistent store ----------
 
 function emptyStore() {
-  return { version: 1, read: {}, saved: {}, notes: {}, snapshots: {}, prefs: { theme: null, sort: 'new' } };
+  return { version: 1, read: {}, saved: {}, notes: {}, snapshots: {}, prefs: { appearance: Theme.sanitize(null), sort: 'new', collapsed: {} } };
 }
 
 function loadStore() {
@@ -117,6 +136,7 @@ function sanitizeArticle(a) {
     url,
     summary: str(a.summary, 1000),
     source: str(a.source, 120),
+    section: str(a.section, 40),
     category: str(a.category, 60),
     author: str(a.author, 120) || null,
     published: str(a.published, 40) || null,
@@ -145,8 +165,11 @@ function sanitizeStore(input) {
   }
   const prefs = input.prefs ?? {};
   out.prefs = {
-    theme: ['light', 'dark'].includes(prefs.theme) ? prefs.theme : null,
+    // Older versions only stored light/dark in prefs.theme.
+    appearance: Theme.sanitize(prefs.appearance || { mode: ['light', 'dark'].includes(prefs.theme) ? prefs.theme : 'auto' }),
     sort: ['new', 'old', 'source'].includes(prefs.sort) ? prefs.sort : 'new',
+    collapsed: Object.fromEntries(Object.entries(prefs.collapsed ?? {})
+      .filter(([k, v]) => /^[a-z0-9-]{1,40}$/.test(k) && v === true)),
   };
   return out;
 }
@@ -167,9 +190,10 @@ function maybeDropSnapshot(id) {
 // ---------- App state ----------
 
 let store = loadStore();
-let data = { categories: [], sources: [], articles: [], generatedAt: null };
+let data = { repo: null, sections: [], categories: [], sources: [], articles: [], generatedAt: null };
+let catById = new Map();
 let byId = new Map();
-const ui = { view: 'all', category: null, concept: null, tag: null, query: '', limit: PAGE_SIZE, active: -1, editing: null, draft: null };
+const ui = { view: 'all', section: null, category: null, concept: null, tag: null, query: '', limit: PAGE_SIZE, active: -1, editing: null, draft: null };
 let visible = [];
 
 const VIEWS = [
@@ -185,6 +209,9 @@ function allArticles() {
   return [...map.values()];
 }
 
+const sectionOf = (a) => a.section || catById.get(a.category)?.section || 'security';
+const sectionById = (id) => data.sections.find((s) => s.id === id);
+
 function matchesQuery(a, q) {
   if (!q) return true;
   const note = store.notes[a.id];
@@ -199,6 +226,7 @@ function computeVisible() {
     if (ui.view === 'unread' && store.read[a.id]) return false;
     if (ui.view === 'saved' && !store.saved[a.id]) return false;
     if (ui.view === 'notebook' && !store.notes[a.id]) return false;
+    if (ui.section && sectionOf(a) !== ui.section) return false;
     if (ui.category && a.category !== ui.category) return false;
     if (ui.concept && !(a.concepts || []).includes(ui.concept)) return false;
     if (ui.tag && !(store.notes[a.id]?.tags || []).includes(ui.tag)) return false;
@@ -230,18 +258,46 @@ function renderSidebar() {
       h('span', {}, v.name), h('span', { class: 'count' }, counts[v.id])))));
 
   const catCounts = new Map();
-  for (const a of pool) catCounts.set(a.category, (catCounts.get(a.category) || 0) + 1);
-  put($('#categories'), 
-    h('li', {}, h('button', { type: 'button', 'aria-current': String(!ui.category), onclick: () => setFilter({ category: null }) },
+  const secCounts = new Map();
+  for (const a of pool) {
+    catCounts.set(a.category, (catCounts.get(a.category) || 0) + 1);
+    secCounts.set(sectionOf(a), (secCounts.get(sectionOf(a)) || 0) + 1);
+  }
+  const collapsed = store.prefs.collapsed;
+  put($('#categories'),
+    h('li', {}, h('button', { type: 'button', 'aria-current': String(!ui.section && !ui.category), onclick: () => setFilter({ section: null, category: null, concept: null }) },
       h('span', {}, 'Everything'), h('span', { class: 'count' }, pool.length))),
-    ...data.categories.map((c) => h('li', {},
-      h('button', { type: 'button', title: c.description, 'aria-current': String(ui.category === c.id), onclick: () => setFilter({ category: c.id }) },
-        h('span', {}, c.name), h('span', { class: 'count' }, catCounts.get(c.id) || 0)))),
+    ...data.sections.map((sec) => {
+      const open = !collapsed[sec.id];
+      const subs = data.categories.filter((c) => c.section === sec.id);
+      return h('li', { class: 'section' },
+        h('div', { class: 'section-row' },
+          h('button', {
+            type: 'button', class: 'caret', 'aria-expanded': String(open),
+            'aria-label': `${open ? 'Collapse' : 'Expand'} ${sec.name}`,
+            onclick: () => { if (open) collapsed[sec.id] = true; else delete collapsed[sec.id]; persist(); renderSidebar(); },
+          }, open ? '▾' : '▸'),
+          h('button', {
+            type: 'button', class: 'section-btn', title: sec.description,
+            'aria-current': String(ui.section === sec.id && !ui.category),
+            onclick: () => { delete collapsed[sec.id]; setFilter({ section: sec.id, category: null, concept: null }); },
+          }, h('span', {}, sec.name), h('span', { class: 'count' }, secCounts.get(sec.id) || 0))),
+        open ? h('ul', { class: 'nav sub' }, ...subs.map((c) => h('li', {},
+          h('button', {
+            type: 'button', title: c.description, 'aria-current': String(ui.category === c.id),
+            onclick: () => setFilter({ section: sec.id, category: c.id, concept: null }),
+          }, h('span', {}, c.name), h('span', { class: 'count' }, catCounts.get(c.id) || 0))))) : null);
+    }),
+    h('li', {}, h('button', { type: 'button', class: 'add-btn', onclick: () => showAddSource(ui.category) }, '+ Add a source')),
   );
 
+  // Concepts come from whichever section you're looking at, so music and
+  // security vocabularies don't crowd each other.
+  const scope = ui.section ? pool.filter((a) => sectionOf(a) === ui.section) : pool;
   const conceptCounts = new Map();
-  for (const a of pool) for (const c of a.concepts || []) conceptCounts.set(c, (conceptCounts.get(c) || 0) + 1);
-  const concepts = [...conceptCounts.entries()].sort((a, b) => b[1] - a[1]);
+  for (const a of scope) for (const c of a.concepts || []) conceptCounts.set(c, (conceptCounts.get(c) || 0) + 1);
+  const concepts = [...conceptCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, ui.section ? 30 : 18);
+  $('#concepts-title').textContent = ui.section ? `${sectionById(ui.section)?.name || ''} concepts` : 'Concepts';
   const tagCounts = new Map();
   for (const n of Object.values(store.notes)) for (const t of n.tags) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
 
@@ -281,27 +337,32 @@ function renderStats() {
 
 function renderContext() {
   const view = VIEWS.find((v) => v.id === ui.view);
-  const cat = data.categories.find((c) => c.id === ui.category);
-  const title = cat ? cat.name : view.name;
+  const cat = catById.get(ui.category);
+  const sec = sectionById(ui.section);
+  const title = cat ? cat.name : sec ? sec.name : view.name;
   const filters = [];
-  if (cat && ui.view !== 'all') filters.push(view.name);
+  if ((cat || sec) && ui.view !== 'all') filters.push(view.name);
   if (ui.concept) filters.push(`concept: ${ui.concept}`);
   if (ui.tag) filters.push(`#${ui.tag}`);
   if (ui.query) filters.push(`"${ui.query}"`);
-  const anyFilter = ui.view !== 'all' || ui.category || ui.concept || ui.tag || ui.query;
-  const desc = ui.view === 'notebook'
+  const anyFilter = ui.view !== 'all' || ui.section || ui.category || ui.concept || ui.tag || ui.query;
+  const desc = ui.view === 'notebook' && !cat && !sec
     ? 'Everything you have written notes on, most recently edited first.'
-    : cat?.description || '';
+    : cat?.description || sec?.description || '';
+  const crumbSection = cat ? sectionById(cat.section) : null;
 
-  put($('#context'), 
+  put($('#context'),
+    crumbSection ? h('button', { type: 'button', class: 'crumb', onclick: () => setFilter({ section: crumbSection.id, category: null, concept: null }) },
+      `${crumbSection.name} ›`) : null,
     h('h1', {}, title),
     h('span', { class: 'count' }, `${visible.length} article${visible.length === 1 ? '' : 's'}`),
     filters.length ? h('span', { class: 'count' }, `· ${filters.join(' · ')}`) : null,
     anyFilter ? h('button', { type: 'button', class: 'link-btn clear', onclick: () => {
       $('#search').value = '';
-      setFilter({ view: 'all', category: null, concept: null, tag: null, query: '' });
+      setFilter({ view: 'all', section: null, category: null, concept: null, tag: null, query: '' });
     } }, 'Clear filters') : null,
     desc ? h('p', {}, desc) : null,
+    cat && data.repo ? h('button', { type: 'button', class: 'link-btn add-link', onclick: () => showAddSource(cat.id) }, `+ Add a source to ${cat.name}`) : null,
   );
 }
 
@@ -330,7 +391,7 @@ function renderCard(a, index) {
   const isSaved = Boolean(store.saved[a.id]);
   const note = store.notes[a.id];
   const href = safeHref(a.url);
-  const cat = data.categories.find((c) => c.id === a.category);
+  const cat = catById.get(a.category);
 
   const card = h('article', {
     class: `card${isRead ? ' read' : ''}${index === ui.active ? ' active' : ''}`,
@@ -340,7 +401,7 @@ function renderCard(a, index) {
     h('div', { class: 'card-meta' },
       h('span', { class: 'src' }, a.source),
       a.published ? h('time', { class: 'dot', datetime: a.published, title: new Date(a.published).toLocaleString() }, ` ${timeAgo(a.published)}`) : null,
-      cat ? h('span', { class: 'dot' }, ` ${cat.name}`) : null,
+      cat ? h('span', { class: 'dot' }, ` ${ui.section ? cat.name : `${sectionById(cat.section)?.name || ''} › ${cat.name}`}`) : null,
       a.author && a.author !== a.source ? h('span', { class: 'dot' }, ` ${a.author}`) : null,
     ),
     h('h2', {}, href
@@ -373,9 +434,9 @@ function renderEditor(a) {
   // Keep an unsaved draft across re-renders (e.g. if you click Save on
   // another card while this editor is open).
   if (ui.draft?.id !== a.id) ui.draft = { id: a.id, text: note.text, tags: note.tags.join(', ') };
-  const textarea = h('textarea', { id: `note-${a.id}`, placeholder: 'What did you learn? How would you explain it to a teammate?' });
+  const textarea = h('textarea', { id: `note-${a.id}`, placeholder: 'What did you learn? How would you explain it to a friend?' });
   textarea.value = ui.draft.text;
-  const tagsInput = h('input', { id: `tags-${a.id}`, type: 'text', placeholder: 'e.g. study-later, oauth, detection', autocomplete: 'off' });
+  const tagsInput = h('input', { id: `tags-${a.id}`, type: 'text', placeholder: 'e.g. study-later, try-this', autocomplete: 'off' });
   tagsInput.value = ui.draft.tags;
   textarea.addEventListener('input', () => { ui.draft.text = textarea.value; });
   tagsInput.addEventListener('input', () => { ui.draft.tags = tagsInput.value; });
@@ -409,7 +470,7 @@ function renderEditor(a) {
     h('div', { class: 'field' },
       h('label', { for: textarea.id }, 'Your notes'),
       textarea,
-      h('div', { class: 'prompts' }, ...NOTE_PROMPTS.map((p) =>
+      h('div', { class: 'prompts' }, ...(NOTE_PROMPTS[sectionOf(a)] || NOTE_PROMPTS.security).map((p) =>
         h('button', { type: 'button', class: 'chip', onclick: () => insertPrompt(p) }, `+ ${p.replace(/: $/, '')}`)))),
     h('div', { class: 'field' },
       h('label', { for: tagsInput.id }, 'Tags'),
@@ -493,10 +554,11 @@ function openDialog(title, ...body) {
 }
 
 function showSources() {
-  const cats = new Map(data.categories.map((c) => [c.id, c.name]));
+  const cats = new Map(data.categories.map((c) => [c.id, `${sectionById(c.section)?.name || ''} › ${c.name}`]));
   const ok = data.sources.filter((s) => s.ok).length;
   openDialog('Sources',
-    h('p', {}, `${ok} of ${data.sources.length} feeds fetched successfully${data.generatedAt ? `, ${timeAgo(data.generatedAt)}` : ''}. Add or remove feeds in feeds.json in the repository.`),
+    h('p', {}, `${ok} of ${data.sources.length} feeds fetched successfully${data.generatedAt ? `, ${timeAgo(data.generatedAt)}` : ''}. To remove a source, delete it from feeds.json in the repository.`),
+    h('div', { class: 'btn-row' }, h('button', { type: 'button', class: 'btn primary', onclick: () => showAddSource() }, '+ Add a source')),
     h('ul', { class: 'row-list' }, ...data.sources.map((s) => {
       const href = safeHref(s.site);
       return h('li', {},
@@ -525,7 +587,7 @@ function showHelp() {
   const rows = [
     ['j / k', 'Next / previous article'], ['o or Enter', 'Open article (marks it read)'], ['s', 'Save / unsave'],
     ['n', 'Write a note'], ['m', 'Toggle read'], ['/', 'Search'], ['1–4', 'All / Unread / Saved / Notebook'],
-    ['Ctrl/⌘ + Enter', 'Save note'], ['Esc', 'Close editor or dialog'], ['?', 'This help'],
+    ['a', 'Add a source'], ['t', 'Appearance'], ['Ctrl/⌘ + Enter', 'Save note'], ['Esc', 'Close editor or dialog'], ['?', 'This help'],
   ];
   openDialog('Keyboard shortcuts',
     h('ul', { class: 'row-list' }, ...rows.map(([k, d]) => h('li', {}, h('span', {}, d), h('kbd', {}, k)))),
@@ -587,17 +649,106 @@ function clearData() {
 
 // ---------- Theme, menu, keyboard ----------
 
-function applyTheme() {
-  if (store.prefs.theme) document.documentElement.dataset.theme = store.prefs.theme;
-  else delete document.documentElement.dataset.theme;
-  $('#theme-toggle').textContent = `Theme: ${store.prefs.theme || 'auto'}`;
+function setAppearance(patch) {
+  store.prefs.appearance = Theme.apply({ ...store.prefs.appearance, ...patch });
+  persist();
 }
 
-function cycleTheme() {
-  const order = [null, 'light', 'dark'];
-  store.prefs.theme = order[(order.indexOf(store.prefs.theme) + 1) % order.length];
-  persist();
-  applyTheme();
+function showAppearance() {
+  const body = h('div', {});
+  const render = () => {
+    const a = store.prefs.appearance;
+    const dark = Theme.isDark(a);
+    const swatch = (id, label, colors) => {
+      const selected = a.preset === id;
+      const mini = h('div', { class: 'mini' },
+        h('div', { class: 'bar' }), h('div', { class: 'bar short' }), h('div', { class: 'pill' }));
+      // CSSOM styling is allowed under our CSP (inline style attributes are not).
+      mini.style.background = colors.bg;
+      mini.children[0].style.background = colors.surface;
+      mini.children[1].style.background = colors.soft;
+      mini.children[2].style.background = colors.accent;
+      return h('button', {
+        type: 'button', class: 'swatch', role: 'radio', 'aria-checked': String(selected), 'aria-label': `${label} theme`,
+        onclick: () => { setAppearance({ preset: id }); render(); },
+      }, mini, h('div', { class: 'label' }, h('span', {}, label), selected ? h('span', { class: 'check' }, '✓') : null));
+    };
+    const seg = (key, options) => h('div', { class: 'seg', role: 'radiogroup' }, ...options.map(([value, label]) =>
+      h('button', { type: 'button', role: 'radio', 'aria-checked': String(a[key] === value), onclick: () => { setAppearance({ [key]: value }); render(); } }, label)));
+    const row = (label, hint, control) => h('div', { class: 'setting-row' },
+      h('span', { class: 'setting-label' }, label, hint ? h('span', { class: 'setting-hint' }, hint) : null), control);
+
+    const picker = h('input', { type: 'color', 'aria-label': 'Pick your own color' });
+    picker.value = a.custom;
+    picker.addEventListener('input', () => { setAppearance({ preset: 'custom', custom: picker.value }); });
+    picker.addEventListener('change', render);
+
+    put(body,
+      h('p', {}, 'Pick a palette and it applies right away. Every theme is tuned so text stays easy to read in both light and dark mode.'),
+      h('div', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Color theme' },
+        ...Object.entries(Theme.PRESETS).map(([id, p]) => swatch(id, p.name, Theme.preview(id, dark, a.tint))),
+        swatch('custom', 'Your color', Theme.preview(a.custom, dark, a.tint))),
+      h('label', { class: 'custom-color' }, picker, 'Choose any color for "Your color"'),
+      h('h3', {}, 'Style'),
+      row('Mode', 'Auto follows your device setting', seg('mode', [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']])),
+      row('Background', 'Tinted uses a hint of your color', seg('tint', [['tinted', 'Tinted'], ['neutral', 'Neutral']])),
+      row('Text size', null, seg('size', [['s', 'Small'], ['m', 'Medium'], ['l', 'Large']])),
+      row('Layout', 'Compact fits more articles on screen', seg('density', [['comfy', 'Comfortable'], ['compact', 'Compact']])),
+      row('Corners', null, seg('corners', [['square', 'Square'], ['soft', 'Soft'], ['round', 'Round']])),
+      h('div', { class: 'btn-row' },
+        h('button', { type: 'button', class: 'btn', onclick: () => { setAppearance(Theme.DEFAULTS); render(); toast('Back to the default look'); } }, 'Reset to default')),
+    );
+  };
+  render();
+  openDialog('Appearance', body);
+}
+
+// ---------- Add source ----------
+
+function showAddSource(presetCategory) {
+  const repo = data.repo;
+  const url = h('input', { id: 'add-url', type: 'text', inputmode: 'url', placeholder: 'https://example.com or a YouTube channel', autocomplete: 'off', spellcheck: 'false' });
+  const name = h('input', { id: 'add-name', type: 'text', placeholder: "Leave empty to use the site's own name", autocomplete: 'off' });
+  const select = h('select', { id: 'add-cat' },
+    h('option', { value: 'auto' }, 'Auto-sort (recommended)'),
+    ...data.sections.map((sec) => h('optgroup', { label: sec.name },
+      ...data.categories.filter((c) => c.section === sec.id).map((c) => h('option', { value: c.id }, c.name)))));
+  if (presetCategory) select.value = presetCategory;
+
+  const submit = (e) => {
+    e.preventDefault();
+    const raw = url.value.trim();
+    const href = safeHref(/^[a-z]+:/i.test(raw) ? raw : `https://${raw}`);
+    if (!raw || !href) { toast('Enter a web address that starts with https://'); url.focus(); return; }
+    const title = `[Add source] ${name.value.trim() || new URL(href).hostname.replace(/^www\./, '')}`;
+    const params = new URLSearchParams({ template: 'add-source.yml', title, url: href, category: select.value, name: name.value.trim() });
+    window.open(`https://github.com/${repo}/issues/new?${params}`, '_blank', 'noopener,noreferrer');
+    $('#dialog').close();
+    toast('Finish on GitHub: click "Create", and the bot takes it from there');
+  };
+
+  if (!repo) {
+    openDialog('Add a source',
+      h('p', {}, 'This copy of Signal isn\'t linked to a GitHub repository yet. Add "repo": "your-name/newsfeed" under settings in feeds.json, or run this on your computer:'),
+      h('p', {}, h('kbd', {}, 'npm run add-source -- https://example.com')));
+    return;
+  }
+
+  openDialog('Add a source',
+    h('form', { class: 'form', onsubmit: submit },
+      h('div', { class: 'field' }, h('label', { for: url.id }, 'Website, feed or YouTube channel'), url,
+        h('div', { class: 'hint' }, 'A homepage works too: the feed is found automatically.')),
+      h('div', { class: 'field' }, h('label', { for: select.id }, 'Where should it go?'), select,
+        h('div', { class: 'hint' }, 'Auto-sort reads the latest posts and picks the best-matching topic.')),
+      h('div', { class: 'field' }, h('label', { for: name.id }, 'Name (optional)'), name),
+      h('div', { class: 'note-box' }, 'What happens next:', h('ol', {},
+        h('li', {}, 'GitHub opens with everything filled in. Click "Create".'),
+        h('li', {}, 'A bot checks the feed, files it, and replies within about a minute.'),
+        h('li', {}, 'This page includes the new source a couple of minutes later.'))),
+      h('div', { class: 'actions' },
+        h('button', { type: 'button', class: 'btn', onclick: () => $('#dialog').close() }, 'Cancel'),
+        h('button', { type: 'submit', class: 'btn primary' }, 'Continue on GitHub'))));
+  queueMicrotask(() => url.focus());
 }
 
 function openMenu() { $('#sidebar').classList.add('open'); $('#menu-btn').setAttribute('aria-expanded', 'true'); }
@@ -629,6 +780,8 @@ function onKey(e) {
     case 'k': setActive(ui.active - 1); break;
     case '/': e.preventDefault(); $('#search').focus(); break;
     case '?': showHelp(); break;
+    case 't': showAppearance(); break;
+    case 'a': e.preventDefault(); showAddSource(ui.category); break;
     case '1': case '2': case '3': case '4': setFilter({ view: VIEWS[Number(e.key) - 1].id }); break;
     case 'o': case 'Enter':
       if (current && safeHref(current.url)) {
@@ -653,11 +806,18 @@ async function loadData() {
     const json = await res.json();
     data = {
       generatedAt: str(json.generatedAt, 40) || null,
-      categories: (json.categories || []).map((c) => ({ id: str(c.id, 60), name: str(c.name, 80), description: str(c.description, 300) })),
+      repo: /^[\w.-]+\/[\w.-]+$/.test(json.repo || '') ? json.repo : null,
+      // Older data files have no sections: treat everything as Security.
+      sections: (json.sections || [{ id: 'security', name: 'Security', description: '' }])
+        .map((s) => ({ id: str(s.id, 40), name: str(s.name, 80), description: str(s.description, 300) })),
+      categories: (json.categories || []).map((c) => ({
+        id: str(c.id, 60), name: str(c.name, 80), description: str(c.description, 300), section: str(c.section, 40) || 'security',
+      })),
       sources: (json.sources || []).map((s) => ({ name: str(s.name, 120), site: s.site, category: str(s.category, 60), ok: Boolean(s.ok), count: num(s.count) ?? 0, error: str(s.error, 200) })),
       articles: (json.articles || []).map(sanitizeArticle).filter(Boolean),
     };
     byId = new Map(data.articles.map((a) => [a.id, a]));
+    catById = new Map(data.categories.map((c) => [c.id, c]));
     $('#updated').textContent = data.generatedAt ? `Updated ${timeAgo(data.generatedAt)}` : 'Updated';
     $('#updated').title = data.generatedAt ? new Date(data.generatedAt).toLocaleString() : '';
   } catch {
@@ -672,7 +832,6 @@ async function loadData() {
 }
 
 function init() {
-  applyTheme();
   $('#sort').value = store.prefs.sort;
   $('#sort').addEventListener('change', (e) => { store.prefs.sort = e.target.value; persist(); setFilter({}); });
 
@@ -691,7 +850,8 @@ function init() {
   $('#open-sources').addEventListener('click', showSources);
   $('#open-data').addEventListener('click', showData);
   $('#open-help').addEventListener('click', showHelp);
-  $('#theme-toggle').addEventListener('click', cycleTheme);
+  $('#open-appearance').addEventListener('click', showAppearance);
+  $('#appearance-btn').addEventListener('click', showAppearance);
   $('#dialog-close').addEventListener('click', () => $('#dialog').close());
   $('#dialog').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
   $('#import-file').addEventListener('change', (e) => { importData(e.target.files[0]); e.target.value = ''; });

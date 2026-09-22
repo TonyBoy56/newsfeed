@@ -1,0 +1,34 @@
+# The in-app "Add source" button opens this form with the fields filled in.
+# Submitting it runs .github/workflows/add-source.yml, which checks the feed,
+# sorts it into a category, commits it, and replies here.
+name: Add a source
+description: Add a news source to Signal. It gets checked and sorted automatically.
+title: "[Add source] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Paste a feed URL, a website's homepage (its feed is found automatically), or a YouTube channel page.
+        Submit, and a bot replies here in about a minute with where it went.
+  - type: input
+    id: url
+    attributes:
+      label: Feed or website URL
+      placeholder: https://example.com
+    validations:
+      required: true
+  - type: input
+    id: category
+    attributes:
+      label: Category
+      description: >-
+        "auto" sorts it for you. Or use a category ID: news, threat-intel, vulns, appsec, cloud,
+        perspectives, music-production, music-theory, games-design, games-security.
+      value: auto
+    validations:
+      required: true
+  - type: input
+    id: name
+    attributes:
+      label: Display name (optional)
+      description: Leave empty to use the feed's own title.

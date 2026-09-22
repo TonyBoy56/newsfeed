@@ -1,72 +1,364 @@
 {
   "settings": {
+    "repo": "TonyBoy56/newsfeed",
     "maxItemsPerFeed": 25,
     "maxAgeDays": 30,
     "summaryLength": 320
   },
-  "categories": [
+  "sections": [
     {
-      "id": "news",
-      "name": "News & Breaches",
-      "description": "Daily security news: breaches, ransomware, policy.",
-      "feeds": [
-        { "name": "The Hacker News", "url": "https://feeds.feedburner.com/TheHackersNews", "site": "https://thehackernews.com" },
-        { "name": "BleepingComputer", "url": "https://www.bleepingcomputer.com/feed/", "site": "https://www.bleepingcomputer.com" },
-        { "name": "The Record", "url": "https://therecord.media/feed", "site": "https://therecord.media" },
-        { "name": "SecurityWeek", "url": "https://www.securityweek.com/feed/", "site": "https://www.securityweek.com" },
-        { "name": "Dark Reading", "url": "https://www.darkreading.com/rss.xml", "site": "https://www.darkreading.com" },
-        { "name": "Krebs on Security", "url": "https://krebsonsecurity.com/feed/", "site": "https://krebsonsecurity.com" }
+      "id": "security",
+      "name": "Security",
+      "description": "Security news, research and advisories.",
+      "categories": [
+        {
+          "id": "news",
+          "name": "News & Breaches",
+          "description": "Daily security news: breaches, ransomware, policy.",
+          "keywords": "breach breaches hack hacked ransomware attack arrested leak phishing scam fraud outage policy lawsuit fine regulator",
+          "feeds": [
+            {
+              "name": "The Hacker News",
+              "url": "https://feeds.feedburner.com/TheHackersNews",
+              "site": "https://thehackernews.com"
+            },
+            {
+              "name": "BleepingComputer",
+              "url": "https://www.bleepingcomputer.com/feed/",
+              "site": "https://www.bleepingcomputer.com"
+            },
+            {
+              "name": "The Record",
+              "url": "https://therecord.media/feed",
+              "site": "https://therecord.media"
+            },
+            {
+              "name": "SecurityWeek",
+              "url": "https://www.securityweek.com/feed/",
+              "site": "https://www.securityweek.com"
+            },
+            {
+              "name": "Dark Reading",
+              "url": "https://www.darkreading.com/rss.xml",
+              "site": "https://www.darkreading.com"
+            },
+            {
+              "name": "Krebs on Security",
+              "url": "https://krebsonsecurity.com/feed/",
+              "site": "https://krebsonsecurity.com"
+            }
+          ]
+        },
+        {
+          "id": "threat-intel",
+          "name": "Threat Research",
+          "description": "Deep dives from vendor research teams on malware and threat actors.",
+          "keywords": "threat actor campaign malware apt espionage intrusion infostealer loader backdoor c2 implant botnet research analysis",
+          "feeds": [
+            {
+              "name": "Cisco Talos",
+              "url": "https://blog.talosintelligence.com/rss/",
+              "site": "https://blog.talosintelligence.com"
+            },
+            {
+              "name": "Unit 42",
+              "url": "https://unit42.paloaltonetworks.com/feed/",
+              "site": "https://unit42.paloaltonetworks.com"
+            },
+            {
+              "name": "Microsoft Security",
+              "url": "https://www.microsoft.com/en-us/security/blog/feed/",
+              "site": "https://www.microsoft.com/en-us/security/blog"
+            },
+            {
+              "name": "Google Project Zero",
+              "url": "https://projectzero.google/feed.xml",
+              "site": "https://projectzero.google"
+            }
+          ]
+        },
+        {
+          "id": "vulns",
+          "name": "Vulnerabilities & Advisories",
+          "description": "What's being exploited right now and what to patch.",
+          "keywords": "cve vulnerability vulnerabilities exploit exploited patch advisory flaw kev critical update firmware",
+          "feeds": [
+            {
+              "name": "CISA Known Exploited Vulns",
+              "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+              "site": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
+              "type": "cisa-kev"
+            },
+            {
+              "name": "CISA Advisories",
+              "url": "https://www.cisa.gov/cybersecurity-advisories/all.xml",
+              "site": "https://www.cisa.gov/news-events/cybersecurity-advisories"
+            },
+            {
+              "name": "SANS Internet Storm Center",
+              "url": "https://isc.sans.edu/rssfeed_full.xml",
+              "site": "https://isc.sans.edu"
+            }
+          ]
+        },
+        {
+          "id": "appsec",
+          "name": "AppSec & Research",
+          "description": "Web and application security techniques, supply chain, secure coding.",
+          "keywords": "xss csrf ssrf injection web application api browser javascript supply chain npm pypi package open source secure coding",
+          "feeds": [
+            {
+              "name": "PortSwigger Research",
+              "url": "https://portswigger.net/research/rss",
+              "site": "https://portswigger.net/research"
+            },
+            {
+              "name": "GitHub Security Blog",
+              "url": "https://github.blog/security/feed/",
+              "site": "https://github.blog/security/"
+            },
+            {
+              "name": "Snyk Blog",
+              "url": "https://snyk.io/blog/feed/",
+              "site": "https://snyk.io/blog/"
+            },
+            {
+              "name": "Google Security Blog",
+              "url": "https://feeds.feedburner.com/GoogleOnlineSecurityBlog",
+              "site": "https://security.googleblog.com"
+            }
+          ]
+        },
+        {
+          "id": "cloud",
+          "name": "Cloud Security",
+          "description": "Securing AWS, cloud identity, and edge infrastructure.",
+          "keywords": "aws azure gcp cloud iam kubernetes container s3 bucket serverless identity misconfiguration edge",
+          "feeds": [
+            {
+              "name": "AWS Security Blog",
+              "url": "https://aws.amazon.com/blogs/security/feed/",
+              "site": "https://aws.amazon.com/blogs/security/"
+            },
+            {
+              "name": "Cloudflare Security",
+              "url": "https://blog.cloudflare.com/tag/security/rss/",
+              "site": "https://blog.cloudflare.com/tag/security/"
+            },
+            {
+              "name": "Wiz Blog",
+              "url": "https://www.wiz.io/feed/rss.xml",
+              "site": "https://www.wiz.io/blog"
+            }
+          ]
+        },
+        {
+          "id": "perspectives",
+          "name": "Perspectives",
+          "description": "Opinion and analysis from long-time practitioners.",
+          "keywords": "opinion essay analysis privacy surveillance ethics society policy trust",
+          "feeds": [
+            {
+              "name": "Schneier on Security",
+              "url": "https://www.schneier.com/feed/atom/",
+              "site": "https://www.schneier.com"
+            },
+            {
+              "name": "Troy Hunt",
+              "url": "https://www.troyhunt.com/rss/",
+              "site": "https://www.troyhunt.com"
+            }
+          ]
+        }
       ]
     },
     {
-      "id": "threat-intel",
-      "name": "Threat Research",
-      "description": "Deep dives from vendor research teams on malware and threat actors.",
-      "feeds": [
-        { "name": "Cisco Talos", "url": "https://blog.talosintelligence.com/rss/", "site": "https://blog.talosintelligence.com" },
-        { "name": "Unit 42", "url": "https://unit42.paloaltonetworks.com/feed/", "site": "https://unit42.paloaltonetworks.com" },
-        { "name": "Microsoft Security", "url": "https://www.microsoft.com/en-us/security/blog/feed/", "site": "https://www.microsoft.com/en-us/security/blog" },
-        { "name": "Google Project Zero", "url": "https://projectzero.google/feed.xml", "site": "https://projectzero.google" }
+      "id": "music",
+      "name": "Music",
+      "description": "Making music: production, gear, theory and practice.",
+      "categories": [
+        {
+          "id": "music-production",
+          "name": "Production & Gear",
+          "description": "Synths, plugins, studios and production techniques.",
+          "keywords": "synth synthesizer plugin vst daw mixing mastering studio gear sampler drum machine recording microphone interface release review sound design",
+          "feeds": [
+            {
+              "name": "CDM Create Digital Music",
+              "url": "https://cdm.link/feed/",
+              "site": "https://cdm.link"
+            },
+            {
+              "name": "Attack Magazine",
+              "url": "https://www.attackmagazine.com/feed/",
+              "site": "https://www.attackmagazine.com"
+            },
+            {
+              "name": "Sound On Sound",
+              "url": "https://www.soundonsound.com/rss.xml",
+              "site": "https://www.soundonsound.com"
+            },
+            {
+              "name": "MusicRadar",
+              "url": "https://www.musicradar.com/feeds.xml",
+              "site": "https://www.musicradar.com"
+            },
+            {
+              "name": "MusicTech",
+              "url": "https://musictech.com/feed/",
+              "site": "https://musictech.com"
+            },
+            {
+              "name": "Synthtopia",
+              "url": "https://www.synthtopia.com/feed/",
+              "site": "https://www.synthtopia.com"
+            },
+            {
+              "name": "Bedroom Producers Blog",
+              "url": "https://bedroomproducersblog.com/feed/",
+              "site": "https://bedroomproducersblog.com"
+            },
+            {
+              "name": "Splice Blog",
+              "url": "https://splice.com/blog/feed/",
+              "site": "https://splice.com/blog/"
+            },
+            {
+              "name": "Sweetwater InSync",
+              "url": "https://www.sweetwater.com/insync/feed/",
+              "site": "https://www.sweetwater.com/insync/"
+            }
+          ]
+        },
+        {
+          "id": "music-theory",
+          "name": "Theory & Learning",
+          "description": "Music theory, ear training, and how music works.",
+          "keywords": "theory chord chords scale harmony melody interval mode ear training practice lesson learn musician history jazz composition songwriting",
+          "maxAgeDays": 365,
+          "feeds": [
+            {
+              "name": "Berklee Online Take Note",
+              "url": "https://online.berklee.edu/takenote/feed/",
+              "site": "https://online.berklee.edu/takenote/"
+            },
+            {
+              "name": "The Ethan Hein Blog",
+              "url": "https://www.ethanhein.com/wp/feed/",
+              "site": "https://www.ethanhein.com"
+            },
+            {
+              "name": "Hooktheory Blog",
+              "url": "https://www.hooktheory.com/blog/feed/",
+              "site": "https://www.hooktheory.com/blog/"
+            },
+            {
+              "name": "Soundfly Flypaper",
+              "url": "https://flypaper.soundfly.com/feed/",
+              "site": "https://flypaper.soundfly.com"
+            },
+            {
+              "name": "Adam Neely (YouTube)",
+              "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCnkp4xDOwqqJD7sSM3xdUiQ",
+              "site": "https://www.youtube.com/channel/UCnkp4xDOwqqJD7sSM3xdUiQ"
+            },
+            {
+              "name": "12tone (YouTube)",
+              "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCTUtqcDkzw7bisadh6AOx5w",
+              "site": "https://www.youtube.com/channel/UCTUtqcDkzw7bisadh6AOx5w"
+            }
+          ]
+        }
       ]
     },
     {
-      "id": "vulns",
-      "name": "Vulnerabilities & Advisories",
-      "description": "What's being exploited right now and what to patch.",
-      "feeds": [
-        { "name": "CISA Known Exploited Vulns", "url": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json", "site": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog", "type": "cisa-kev" },
-        { "name": "CISA Advisories", "url": "https://www.cisa.gov/cybersecurity-advisories/all.xml", "site": "https://www.cisa.gov/news-events/cybersecurity-advisories" },
-        { "name": "SANS Internet Storm Center", "url": "https://isc.sans.edu/rssfeed_full.xml", "site": "https://isc.sans.edu" }
-      ]
-    },
-    {
-      "id": "appsec",
-      "name": "AppSec & Research",
-      "description": "Web and application security techniques, supply chain, secure coding.",
-      "feeds": [
-        { "name": "PortSwigger Research", "url": "https://portswigger.net/research/rss", "site": "https://portswigger.net/research" },
-        { "name": "GitHub Security Blog", "url": "https://github.blog/security/feed/", "site": "https://github.blog/security/" },
-        { "name": "Snyk Blog", "url": "https://snyk.io/blog/feed/", "site": "https://snyk.io/blog/" },
-        { "name": "Google Security Blog", "url": "https://feeds.feedburner.com/GoogleOnlineSecurityBlog", "site": "https://security.googleblog.com" }
-      ]
-    },
-    {
-      "id": "cloud",
-      "name": "Cloud Security",
-      "description": "Securing AWS, cloud identity, and edge infrastructure.",
-      "feeds": [
-        { "name": "AWS Security Blog", "url": "https://aws.amazon.com/blogs/security/feed/", "site": "https://aws.amazon.com/blogs/security/" },
-        { "name": "Cloudflare Security", "url": "https://blog.cloudflare.com/tag/security/rss/", "site": "https://blog.cloudflare.com/tag/security/" },
-        { "name": "Wiz Blog", "url": "https://www.wiz.io/feed/rss.xml", "site": "https://www.wiz.io/blog" }
-      ]
-    },
-    {
-      "id": "perspectives",
-      "name": "Perspectives",
-      "description": "Opinion and analysis from long-time practitioners.",
-      "feeds": [
-        { "name": "Schneier on Security", "url": "https://www.schneier.com/feed/atom/", "site": "https://www.schneier.com" },
-        { "name": "Troy Hunt", "url": "https://www.troyhunt.com/rss/", "site": "https://www.troyhunt.com" }
+      "id": "games",
+      "name": "Games",
+      "description": "Indie games, game design, and the security side of games.",
+      "categories": [
+        {
+          "id": "games-design",
+          "name": "Indie & Design",
+          "description": "Indie releases and the craft and business of making games.",
+          "keywords": "indie game design developer studio launch steam wishlist marketing publisher gameplay level narrative jam release trailer",
+          "maxAgeDays": 90,
+          "feeds": [
+            {
+              "name": "Game Developer",
+              "url": "https://www.gamedeveloper.com/rss.xml",
+              "site": "https://www.gamedeveloper.com"
+            },
+            {
+              "name": "itch.io Featured",
+              "url": "https://itch.io/feed/featured.xml",
+              "site": "https://itch.io/games/featured"
+            },
+            {
+              "name": "How To Market A Game",
+              "url": "https://howtomarketagame.com/feed/",
+              "site": "https://howtomarketagame.com"
+            },
+            {
+              "name": "Deconstructor of Fun",
+              "url": "https://www.deconstructoroffun.com/blog?format=rss",
+              "site": "https://www.deconstructoroffun.com"
+            },
+            {
+              "name": "Raph Koster",
+              "url": "https://www.raphkoster.com/feed/",
+              "site": "https://www.raphkoster.com"
+            },
+            {
+              "name": "Lost Garden",
+              "url": "https://lostgarden.com/feed/",
+              "site": "https://lostgarden.com"
+            },
+            {
+              "name": "Game Maker's Toolkit (YouTube)",
+              "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCqJ-Xo29CKyLTjn6z2XwYAw",
+              "site": "https://www.youtube.com/channel/UCqJ-Xo29CKyLTjn6z2XwYAw"
+            }
+          ]
+        },
+        {
+          "id": "games-security",
+          "name": "Game Security & Hacking",
+          "description": "Anti-cheat, reverse engineering, console homebrew and how games break.",
+          "keywords": "anti-cheat cheat reverse engineering exploit homebrew jailbreak console emulator kernel driver hypervisor decompile ghidra glitch mechanics",
+          "maxAgeDays": 365,
+          "feeds": [
+            {
+              "name": "Aftermath Labs",
+              "url": "https://aftermathlabs.net/index.xml",
+              "site": "https://aftermathlabs.net"
+            },
+            {
+              "name": "secret club",
+              "url": "https://secret.club/feed.xml",
+              "site": "https://secret.club"
+            },
+            {
+              "name": "Wololo",
+              "url": "https://wololo.net/feed/",
+              "site": "https://wololo.net"
+            },
+            {
+              "name": "LiveOverflow (YouTube)",
+              "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UClcE-kVhqyiHCcjYwcpfj9w",
+              "site": "https://www.youtube.com/channel/UClcE-kVhqyiHCcjYwcpfj9w"
+            },
+            {
+              "name": "Retro Game Mechanics Explained (YouTube)",
+              "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCwRqWnW5ZkVaP_lZF7caZ-g",
+              "site": "https://www.youtube.com/channel/UCwRqWnW5ZkVaP_lZF7caZ-g"
+            },
+            {
+              "name": "Modern Vintage Gamer (YouTube)",
+              "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCjFaPUcJU1vwk193mnW_w1w",
+              "site": "https://www.youtube.com/channel/UCjFaPUcJU1vwk193mnW_w1w"
+            }
+          ]
+        }
       ]
     }
   ]

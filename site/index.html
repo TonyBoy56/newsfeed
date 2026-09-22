@@ -11,9 +11,11 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="color-scheme" content="light dark">
-  <title>Signal · Security Newsfeed</title>
+  <title>Signal · Newsfeed</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
+  <!-- Applies your saved colors before first paint, so there's no flash. -->
+  <script src="theme.js"></script>
   <script type="module" src="app.js"></script>
 </head>
 <body>
@@ -34,13 +36,13 @@
         <ul class="nav" id="views"></ul>
       </nav>
 
-      <nav class="group" aria-label="Categories">
-        <div class="group-title">Categories</div>
+      <nav class="group" aria-label="Topics">
+        <div class="group-title">Topics</div>
         <ul class="nav" id="categories"></ul>
       </nav>
 
       <section class="group" aria-label="Concepts">
-        <div class="group-title">Concepts</div>
+        <div class="group-title" id="concepts-title">Concepts</div>
         <div class="chips" id="concepts"></div>
       </section>
 
@@ -53,7 +55,7 @@
         <button class="link-btn" id="open-sources" type="button">Sources</button>
         <button class="link-btn" id="open-data" type="button">Your data</button>
         <button class="link-btn" id="open-help" type="button">Shortcuts</button>
-        <button class="link-btn" id="theme-toggle" type="button">Theme</button>
+        <button class="link-btn" id="open-appearance" type="button">Appearance</button>
       </div>
     </aside>
 
@@ -63,6 +65,7 @@
         <div class="search">
           <input id="search" type="search" placeholder="Search titles, summaries, CVEs, notes…  ( / )" autocomplete="off" aria-label="Search articles">
         </div>
+        <button class="icon-btn" id="appearance-btn" type="button" aria-label="Appearance" title="Appearance (t)">◐</button>
         <select id="sort" aria-label="Sort">
           <option value="new">Newest</option>
           <option value="old">Oldest</option>

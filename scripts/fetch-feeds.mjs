@@ -14,57 +14,19 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseXmlFeed, parseKev, safeUrl } from './lib/parse.mjs';
+import { fetchText } from './lib/http.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const FEEDS_FILE = resolve(ROOT, process.env.FEEDS_FILE || 'feeds.json');
 const OUTPUT_FILE = resolve(ROOT, process.env.OUTPUT_FILE || 'site/data/articles.json');
 
-const TIMEOUT_MS = 20_000;
-const MAX_BYTES = 8 * 1024 * 1024; // refuse absurdly large responses
 const CONCURRENCY = 6;
-const USER_AGENT = 'PersonalNewsfeed/1.0 (+https://github.com/TonyBoy56/newsfeed)';
-
-async function fetchText(url) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: {
-        'User-Agent': USER_AGENT,
-        Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, application/json;q=0.9, */*;q=0.5',
-      },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const declared = Number(res.headers.get('content-length') || 0);
-    if (declared > MAX_BYTES) throw new Error(`Response too large (${declared} bytes)`);
-
-    // Stream and stop reading if the body grows past the limit.
-    const reader = res.body.getReader();
-    const chunks = [];
-    let total = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > MAX_BYTES) {
-        controller.abort();
-        throw new Error('Response too large');
-      }
-      chunks.push(value);
-    }
-    return Buffer.concat(chunks).toString('utf8');
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 async function fetchWithRetry(url, attempts = 2) {
   let lastErr;
   for (let i = 0; i < attempts; i++) {
     try {
-      return await fetchText(url);
+      return (await fetchText(url)).text;
     } catch (err) {
       lastErr = err;
       if (i < attempts - 1) await new Promise((r) => setTimeout(r, 1500));
@@ -91,7 +53,7 @@ async function loadPrevious() {
   try {
     if (url) {
       if (!safeUrl(url)) throw new Error('PREVIOUS_DATA_URL must be http(s)');
-      return JSON.parse(await fetchText(url));
+      return JSON.parse((await fetchText(url)).text);
     }
     return JSON.parse(await readFile(OUTPUT_FILE, 'utf8'));
   } catch (err) {
@@ -104,21 +66,27 @@ async function main() {
   const config = JSON.parse(await readFile(FEEDS_FILE, 'utf8'));
   const settings = { maxItemsPerFeed: 25, maxAgeDays: 30, summaryLength: 320, ...config.settings };
 
-  const jobs = config.categories.flatMap((cat) => cat.feeds.map((feed) => ({ feed, category: cat.id })));
+  // feeds.json groups categories into sections (Security, Music, Games…).
+  // An older flat "categories" list still works and is treated as Security.
+  const sections = config.sections ?? [{ id: 'security', name: 'Security', categories: config.categories ?? [] }];
+  const categories = sections.flatMap((sec) => sec.categories.map((cat) => ({ ...cat, section: sec.id })));
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+  const jobs = categories.flatMap((cat) => cat.feeds.map((feed) => ({ feed, category: cat.id, section: cat.section })));
   console.log(`Fetching ${jobs.length} feeds…`);
 
-  const results = await mapLimit(jobs, CONCURRENCY, async ({ feed, category }) => {
+  const results = await mapLimit(jobs, CONCURRENCY, async ({ feed, category, section }) => {
     const started = Date.now();
+    const feedSettings = { ...settings, section };
     try {
       const body = await fetchWithRetry(feed.url);
       const articles = feed.type === 'cisa-kev'
-        ? parseKev(body, feed, category, settings)
-        : parseXmlFeed(body, feed, category, settings);
+        ? parseKev(body, feed, category, feedSettings)
+        : parseXmlFeed(body, feed, category, feedSettings);
       console.log(`  ✓ ${feed.name}: ${articles.length} (${Date.now() - started} ms)`);
-      return { feed, category, ok: true, count: articles.length, articles };
+      return { feed, category, section, ok: true, count: articles.length, articles };
     } catch (err) {
       console.warn(`  ✗ ${feed.name}: ${err.message}`);
-      return { feed, category, ok: false, error: err.message, articles: [] };
+      return { feed, category, section, ok: false, error: err.message, articles: [] };
     }
   });
 
@@ -128,24 +96,31 @@ async function main() {
   const previous = await loadPrevious();
   const knownSources = new Set(jobs.map((j) => j.feed.name));
   for (const a of previous?.articles ?? []) {
-    if (knownSources.has(a.source)) byId.set(a.id, a);
+    if (knownSources.has(a.source) && categoryById.has(a.category)) {
+      byId.set(a.id, { ...a, section: categoryById.get(a.category).section });
+    }
   }
   for (const r of results) for (const a of r.articles) byId.set(a.id, { ...byId.get(a.id), ...a });
 
-  const cutoff = Date.now() - settings.maxAgeDays * 86_400_000;
+  // Categories can keep items longer (evergreen learning content, say).
+  const cutoffFor = (a) => Date.now() - (categoryById.get(a.category)?.maxAgeDays ?? settings.maxAgeDays) * 86_400_000;
   const fetchedAt = new Date().toISOString();
   const articles = [...byId.values()]
     .map((a) => ({ ...a, published: a.published || a.firstSeen || fetchedAt, firstSeen: a.firstSeen || fetchedAt }))
-    .filter((a) => Date.parse(a.published) >= cutoff)
+    .filter((a) => Date.parse(a.published) >= cutoffFor(a))
     .sort((a, b) => b.published.localeCompare(a.published));
 
+  const repo = /^[\w.-]+\/[\w.-]+$/.test(settings.repo || '') ? settings.repo : null;
   const output = {
     generatedAt: fetchedAt,
-    categories: config.categories.map(({ id, name, description }) => ({ id, name, description })),
+    repo, // lets the app link to GitHub for "Add source"
+    sections: sections.map(({ id, name, description }) => ({ id, name, description: description || '' })),
+    categories: categories.map(({ id, name, description, section }) => ({ id, name, description: description || '', section })),
     sources: results.map((r) => ({
       name: r.feed.name,
       site: safeUrl(r.feed.site) || safeUrl(r.feed.url),
       category: r.category,
+      section: r.section,
       ok: r.ok,
       count: r.ok ? r.count : 0,
       error: r.ok ? undefined : r.error,

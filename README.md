@@ -1,12 +1,17 @@
-# Signal: a personal security newsfeed
+# Signal: a personal newsfeed
 
-Signal pulls 22 hand-picked security sources into one fast, private reader. You can save articles, tag them and write notes as you learn. It also doubles as a hands-on security project: every design choice here is a real defensive technique, explained in the code and in [Security design](#security-design) below.
+Signal pulls 50 hand-picked sources into one fast, private reader, across three interests: **Security**, **Music** and **Games**. You can save articles, tag them and write notes as you learn. It also doubles as a hands-on security project: every design choice here is a real defensive technique, explained in the code and in [Security design](#security-design) below.
 
-- **Organized by topic:** News & Breaches, Threat Research, Vulnerabilities & Advisories, AppSec, Cloud Security, Perspectives.
-- **Concept tags:** each article is auto-tagged (phishing, identity, ransomware, supply chain…) so you can study by idea, not just by source.
+- **Organized by topic:**
+  - **Security:** News & Breaches, Threat Research, Vulnerabilities & Advisories, AppSec, Cloud Security, Perspectives
+  - **Music:** Production & Gear, Theory & Learning
+  - **Games:** Indie & Design, Game Security & Hacking
+- **Concept tags:** each article is auto-tagged with its section's vocabulary (phishing and ransomware for security, synthesis and mixing for music, anti-cheat and reverse engineering for games), so you can study by idea, not just by source.
 - **CVE links:** every CVE ID mentioned links straight to the National Vulnerability Database. CISA's Known Exploited Vulnerabilities catalog is built in.
 - **Notebook:** write notes with learning prompts ("Key takeaway", "How I would detect this"), add your own tags, and review everything in one place.
 - **Private by design:** your saves and notes never leave your browser. Export and import lets you back them up or move them.
+- **Add sources in two clicks:** paste a website, feed or YouTube channel, and it's checked and sorted into the right subcategory for you.
+- **Make it yours:** 8 color themes plus any color you pick, light/dark/auto, text size, density and corner style.
 - **Keyboard-friendly:** `j`/`k` to move, `s` to save, `n` to write a note, `/` to search, `?` for all shortcuts.
 
 ## How it works
@@ -68,21 +73,61 @@ Run `npm run fetch` any time you want fresh articles. The local server only list
 
 **Moving from Pages to local, or between devices:** in the app, open **Your data → Export backup**, then **Import backup** on the other copy. Everything else is the same code. To stop using Pages, turn it off under **Settings → Pages**. At that point you can also make the repo private.
 
-## Customize your sources
+## Add a source
 
-Edit `feeds.json`. Each category has a list of feeds:
+**From the app (easiest):** click **+ Add a source** in the sidebar (or press `a`).
+
+1. Paste a feed URL, a website's homepage or a YouTube channel page (`youtube.com/@name` works).
+2. Leave **Auto-sort** selected, or pick where it should go.
+3. Click **Continue on GitHub**, then **Create** on the page that opens.
+
+A bot (the `Add source` workflow) then:
+
+- finds the feed, even from a homepage or YouTube handle
+- checks that it works and isn't already in your list
+- auto-sorts it into the best-matching subcategory
+- commits the change and rebuilds the site
+- replies on the request with where the source went and its latest posts
+
+**From your computer:**
+
+```bash
+npm run add-source -- https://example.com                  # auto-sort
+npm run add-source -- https://example.com music-theory     # choose the category
+git add feeds.json && git commit -m "Add source" && git push
+```
+
+**How auto-sort works:** it reads the new source's latest posts and compares their words with each subcategory's name, description, `keywords` and the articles already in it. The comparison uses TF-IDF cosine similarity, a classic text-matching technique. It gets smarter as your feed grows. To steer it, edit a category's `"keywords"` in `feeds.json`.
+
+## Change the look
+
+Click **◐** in the toolbar, **Appearance** in the sidebar, or press `t`. Pick a palette, or choose any color for "Your color". Every palette is generated from a single hue, then adjusted until all text meets WCAG AA contrast (4.5:1), so even bright yellow stays readable. Your choice is saved in this browser and applies before the page draws, so there's no flash of the default theme.
+
+## Customize your sources by hand
+
+Edit `feeds.json`. It's organized as **sections** (Security, Music, Games), each with **categories**, and each category has a list of feeds:
 
 ```json
 { "name": "Krebs on Security", "url": "https://krebsonsecurity.com/feed/", "site": "https://krebsonsecurity.com" }
 ```
 
-Push the change and the site rebuilds. To add a whole new interest area (say, AI or design), add another category object. The sidebar picks it up automatically. Most sites publish a feed at `/feed`, `/rss`, or `/feed.xml`. If a feed breaks, the app's **Sources** panel shows which one failed and why.
+Push the change and the site rebuilds. To add a new interest area, add another section object. The sidebar picks it up automatically.
+
+Where to find feeds:
+
+- **Most sites:** try `/feed`, `/rss` or `/feed.xml` at the end of the address.
+- **YouTube channels:** use `https://www.youtube.com/feeds/videos.xml?channel_id=CHANNEL_ID`. The channel ID starts with `UC`; find it on the channel page under **About → Share channel → Copy channel ID**.
+
+If a feed breaks, the app's **Sources** panel shows which one failed and why.
+
+A category can set its own `"maxAgeDays"` to keep articles longer than the default. The Theory & Learning and Game Security categories use this, because their posts stay useful for months.
 
 Settings at the top of `feeds.json`:
 
 - `maxItemsPerFeed`: items to keep from each feed per fetch.
-- `maxAgeDays`: how long articles stay in the feed. Saved or noted articles are kept forever.
+- `maxAgeDays`: how long articles stay in the feed, unless a category overrides it. Saved or noted articles are kept forever.
 - `summaryLength`: summary length in characters.
+- `repo`: your GitHub `owner/name`, which the in-app Add source button uses.
 
 ## Security design
 
@@ -100,6 +145,11 @@ This project is small, but it faces the same threats as bigger apps: untrusted i
 | Over-privileged CI tokens | The workflow starts with `permissions: {}`. The build job can only read; only the deploy job can publish. No token is left in the checkout | `.github/workflows/deploy.yml` |
 | Malicious dependency install scripts | `npm ci --ignore-scripts`, a lockfile, and one pinned dependency | workflows, `package.json` |
 | Known-vulnerable dependencies | Dependabot opens update PRs weekly, and CI runs `npm audit` on every PR | `.github/dependabot.yml`, `ci.yml` |
+| Anyone opening an issue to trigger the add-source bot | The workflow only runs for issues opened by the repo owner | `.github/workflows/add-source.yml` |
+| Script injection through issue text | Issue text reaches the script only through an environment variable. It is never pasted into a shell command with `${{ }}` | `add-source.yml` |
+| SSRF: making the bot fetch internal addresses (such as cloud metadata at `169.254.169.254`) | Hosts that resolve to private or loopback addresses are refused, and every redirect hop is re-checked | `scripts/lib/http.mjs` |
+| A feed's title injecting links or @mentions into the bot's reply | Remote text is stripped to plain text and Markdown-escaped before it's posted | `mdSafe()` in `add-source.mjs` |
+| Themes as an injection path | Colors are applied through the CSS Object Model, which CSP allows, rather than inline styles, which CSP blocks. Saved settings are validated against an allow-list | `site/theme.js` |
 | Path traversal on the local server | Resolved paths must stay inside `site/`. It binds to `127.0.0.1` only | `scripts/serve.mjs` |
 
 ### Practice exercises
@@ -110,16 +160,20 @@ Each of these is a real-world skill:
 2. **Pin actions by commit SHA.** Replace `actions/checkout@v5` with its full commit hash (find it on the action's Releases page). This defends against a compromised tag, the attack used on `tj-actions/changed-files` in 2025.
 3. **Scan your repo.** Enable **Settings → Code security → CodeQL** and **Secret scanning**, then read the results.
 4. **Grade your headers.** Run the local server and inspect the response headers in dev tools. Compare them with what GitHub Pages sends, and research why Pages can't set `frame-ancestors`.
-5. **Threat-model a new feature.** Before adding something (like AI summaries through an API key), write down what could go wrong: where the key is stored, and what happens if a feed contains a prompt injection.
+5. **Close the DNS rebinding gap.** `http.mjs` checks where a hostname points, then lets `fetch()` look it up again. Research why an attacker could change the answer in between, and how pinning the checked IP fixes it.
+6. **Threat-model a new feature.** Before adding something (like AI summaries through an API key), write down what could go wrong: where the key is stored, and what happens if a feed contains a prompt injection.
 
 ## Project layout
 
 ```
 feeds.json                   your sources
 scripts/fetch-feeds.mjs      fetches, cleans and merges feeds
+scripts/add-source.mjs       finds, validates and auto-sorts new sources
+scripts/lib/http.mjs         SSRF-guarded, size-capped fetching
 scripts/lib/parse.mjs        RSS / Atom / CISA KEV parsing and sanitizing
 scripts/serve.mjs            local web server with security headers
 site/                        the reader (plain HTML, CSS, JS; no build step)
+site/theme.js                palette generator with contrast checks
 test/                        parser and security tests (npm test)
 .github/workflows/           scheduled fetch + deploy, and PR checks
 ```

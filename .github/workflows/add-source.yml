@@ -1,0 +1,85 @@
+# Adds a source when you submit the "Add a source" issue form (the in-app
+# "Add source" button takes you there with everything filled in).
+#
+# Security notes, because issue-triggered workflows are a classic attack path:
+# * Only issues opened by the repo owner are processed. Anyone can open an
+#   issue on a public repo; nobody else can make this run.
+# * Issue text is passed to the script through an environment variable and
+#   never pasted into a shell command with ${{ }}, which would let a crafted
+#   issue inject commands ("script injection").
+# * The fetch is SSRF-guarded, size-capped and time-limited (scripts/lib/http.mjs).
+# * This job can write code, so it only runs our own script on our own repo.
+
+name: Add source
+
+on:
+  issues:
+    types: [opened]
+
+permissions: {}
+
+concurrency:
+  group: add-source
+  cancel-in-progress: false
+
+jobs:
+  add:
+    if: >-
+      github.event.issue.user.login == github.repository_owner &&
+      startsWith(github.event.issue.title, '[Add source]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # commit the updated feeds.json
+      issues: write   # reply and close the issue
+      actions: write  # start the deploy workflow
+    env:
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5 # keeps credentials: this job needs to push
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - name: Add and sort the source
+        run: node scripts/add-source.mjs --from-issue
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          DATA_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/data/articles.json
+          RESULT_FILE: ${{ runner.temp }}/result.md
+          COMMIT_FILE: ${{ runner.temp }}/commit.txt
+
+      - name: Commit feeds.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add feeds.json
+          git commit -F "$RUNNER_TEMP/commit.txt"
+          git push
+
+      # Pushes made with the workflow token don't trigger other workflows, so
+      # start the rebuild explicitly.
+      - name: Rebuild the site
+        run: gh workflow run deploy.yml --ref "$DEFAULT_BRANCH"
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+
+      - name: Reply and close
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body-file "$RUNNER_TEMP/result.md"
+          gh issue close "$ISSUE_NUMBER" --reason completed
+
+      - name: Explain what went wrong
+        if: failure()
+        run: |
+          # Only reuse the script's message if it describes the failure.
+          if [ -f "$RUNNER_TEMP/result.md" ] && grep -q "^❌" "$RUNNER_TEMP/result.md"; then
+            gh issue comment "$ISSUE_NUMBER" --body-file "$RUNNER_TEMP/result.md"
+          else
+            gh issue comment "$ISSUE_NUMBER" --body "❌ Something went wrong adding this source. Open the Actions tab for details."
+          fi

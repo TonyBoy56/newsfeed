@@ -11,6 +11,7 @@
     "fetch": "node scripts/fetch-feeds.mjs",
     "start": "node scripts/serve.mjs",
     "dev": "npm run fetch && npm run start",
+    "add-source": "node scripts/add-source.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {

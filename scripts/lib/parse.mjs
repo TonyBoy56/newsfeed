@@ -105,26 +105,61 @@ export function extractCves(...parts) {
 }
 
 // Lightweight concept tagging so you can browse by idea, not just by source.
-export const CONCEPTS = {
-  'ransomware': /\bransomware\b/i,
-  'phishing': /\bphish(ing|ed)?\b|\bdevice[- ]code\b/i,
-  'zero-day': /\bzero[- ]day\b|\b0[- ]?day\b/i,
-  'supply chain': /\bsupply[- ]chain\b|\bnpm\b|\bpypi\b|\bdependenc(y|ies)\b/i,
-  'identity': /\bidentity\b|\biam\b|\bmfa\b|\b2fa\b|\bsso\b|\boauth\b|\bcredential/i,
-  'cloud': /\bcloud\b|\baws\b|\bazure\b|\bgcp\b|\bkubernetes\b|\bs3\b/i,
-  'AI security': /\b(ai|llm|genai|gpt|prompt injection|agentic|ai agents?)\b/i,
-  'web security': /\bxss\b|\bcsrf\b|\bssrf\b|\bsql injection\b|\bsqli\b|\bweb app/i,
-  'malware': /\bmalware\b|\btrojan\b|\bbotnet\b|\binfostealer\b|\bstealer\b|\bbackdoor\b|\bc2\b/i,
-  'data breach': /\bbreach(es|ed)?\b|\bdata leak\b|\bexposed data\b/i,
-  'patching': /\bpatch(es|ed|ing)?\b|\bpatch tuesday\b|\bupdate now\b/i,
-  'automation': /\bautomat(e|ed|ion)\b|\bsoar\b|\borchestration\b|\bplaybook/i,
-  'privacy': /\bprivacy\b|\bgdpr\b|\bsurveillance\b|\bdata broker/i,
-  'nation-state': /\bnation[- ]state\b|\bapt\d*\b|\bstate[- ]sponsored\b/i,
+// Each section has its own vocabulary: "patching" means something very
+// different to a sysadmin than to a synth player.
+export const CONCEPT_SETS = {
+  security: {
+    'ransomware': /\bransomware\b/i,
+    'phishing': /\bphish(ing|ed)?\b|\bdevice[- ]code\b/i,
+    'zero-day': /\bzero[- ]day\b|\b0[- ]?day\b/i,
+    'supply chain': /\bsupply[- ]chain\b|\bnpm\b|\bpypi\b|\bdependenc(y|ies)\b/i,
+    'identity': /\bidentity\b|\biam\b|\bmfa\b|\b2fa\b|\bsso\b|\boauth\b|\bcredential/i,
+    'cloud': /\bcloud\b|\baws\b|\bazure\b|\bgcp\b|\bkubernetes\b|\bs3\b/i,
+    'AI security': /\b(ai|llm|genai|gpt|prompt injection|agentic|ai agents?)\b/i,
+    'web security': /\bxss\b|\bcsrf\b|\bssrf\b|\bsql injection\b|\bsqli\b|\bweb app/i,
+    'malware': /\bmalware\b|\btrojan\b|\bbotnet\b|\binfostealer\b|\bstealer\b|\bbackdoor\b|\bc2\b/i,
+    'data breach': /\bbreach(es|ed)?\b|\bdata leak\b|\bexposed data\b/i,
+    'patching': /\bpatch(es|ed|ing)?\b|\bpatch tuesday\b|\bupdate now\b/i,
+    'automation': /\bautomat(e|ed|ion)\b|\bsoar\b|\borchestration\b|\bplaybook/i,
+    'privacy': /\bprivacy\b|\bgdpr\b|\bsurveillance\b|\bdata broker/i,
+    'nation-state': /\bnation[- ]state\b|\bapt\d*\b|\bstate[- ]sponsored\b/i,
+  },
+  music: {
+    'synthesis': /\bsynth(s|esis|esizer|esizers)?\b|\boscillator|\bmodular\b|\beurorack\b|\bwavetable\b/i,
+    'mixing': /\bmix(ing|down)?\b|\beq\b|\bcompress(ion|or)\b|\breverb\b|\bsidechain/i,
+    'mastering': /\bmaster(ing|ed)\b|\bloudness\b|\blimiter\b/i,
+    'sampling': /\bsampl(e|es|er|ing)\b|\bdrum machine/i,
+    'plugins': /\bplug-?ins?\b|\bvst\d?\b|\baudio units?\b/i,
+    'DAW': /\bdaw\b|\bableton\b|\blogic pro\b|\bfl studio\b|\bbitwig\b|\breaper\b|\bpro tools\b|\bcubase\b/i,
+    'MIDI': /\bmidi\b|\bcontroller\b|\bsequencer\b/i,
+    'recording': /\brecord(ing|ed)\b|\bmicrophones?\b|\bmics?\b|\bpreamp|\baudio interface/i,
+    'theory': /\bchords?\b|\bscales?\b|\bharmon(y|ic|ies)\b|\bmodes?\b|\bprogressions?\b|\bintervals?\b|\btheory\b|\bkey change/i,
+    'rhythm': /\bdrums?\b|\bbeats?\b|\bgroove\b|\brhythm|\btempo\b|\bpolyrhythm/i,
+    'songwriting': /\bsongwrit|\blyric|\bmelod(y|ies|ic)\b|\bhooks?\b/i,
+    'ear training': /\bear training\b|\bby ear\b|\btranscrib/i,
+    'free stuff': /\bfree\b|\bfreebie|\bdeal\b|\bsale\b/i,
+  },
+  games: {
+    'indie': /\bindie\b|\bsolo dev|\bitch\.io\b|\bgame jam\b/i,
+    'game design': /\bgame design|\bmechanics?\b|\blevel design|\bgameplay\b|\bdesigner/i,
+    'narrative': /\bnarrative\b|\bstory(telling)?\b|\bwriting\b/i,
+    'marketing': /\bmarketing\b|\bwishlists?\b|\bsteam page\b|\blaunch(ing|ed)?\b|\bnext fest\b/i,
+    'business': /\brevenue\b|\bmonetiz|\bf2p\b|\bfree-to-play\b|\blayoffs?\b|\bfunding\b|\bpublisher/i,
+    'anti-cheat': /\banti-?cheat\b|\bcheat(s|ing|ers)?\b/i,
+    'reverse engineering': /\brevers(e|ing)[- ]engineer|\bdisassembl|\bdecompil|\bghidra\b|\bida pro\b|\bdevirtuali[sz]|\bobfuscat/i,
+    'homebrew & exploits': /\bhomebrew\b|\bjailbreak|\bexploit|\bcfw\b|\bcustom firmware\b/i,
+    'kernel & low-level': /\bkernel\b|\bhypervisor\b|\bdrivers?\b|\bbootloader\b|\bfirmware\b|\bassembly\b/i,
+    'emulation': /\bemulat(or|ion|ed)\b/i,
+    'retro': /\bretro\b|\bnes\b|\bsnes\b|\bc64\b|\bgame ?boy\b|\bn64\b|\bsega\b|\batari\b|\bps1\b/i,
+    'modding': /\bmods?\b|\bmodding\b|\bmodder/i,
+    'glitches': /\bglitch(es)?\b|\bspeedrun|\bbugs?\b/i,
+  },
 };
 
-export function extractConcepts(...parts) {
+export function extractConcepts(section, ...parts) {
   const hay = parts.join(' ');
-  return Object.entries(CONCEPTS).filter(([, re]) => re.test(hay)).map(([k]) => k);
+  const set = CONCEPT_SETS[section] ?? CONCEPT_SETS.security;
+  return Object.entries(set).filter(([, re]) => re.test(hay)).map(([k]) => k);
 }
 
 export function articleId(link, title) {
@@ -132,6 +167,7 @@ export function articleId(link, title) {
 }
 
 function buildArticle({ title, link, summary, published, author }, feed, category, settings) {
+  const section = settings.section || 'security';
   const cleanTitle = truncate(htmlToText(title) || '(untitled)', 300);
   const url = safeUrl(link, feed.site || feed.url);
   if (!url) return null;
@@ -142,11 +178,12 @@ function buildArticle({ title, link, summary, published, author }, feed, categor
     url,
     summary: cleanSummary,
     source: feed.name,
+    section,
     category,
     author: author ? truncate(htmlToText(author), 120) : null,
     published: published || null,
     cves: extractCves(cleanTitle, cleanSummary),
-    concepts: extractConcepts(cleanTitle, cleanSummary),
+    concepts: extractConcepts(section, cleanTitle, cleanSummary),
   };
 }
 
@@ -169,7 +206,8 @@ export function parseXmlFeed(xml, feed, category, settings) {
       raw.push({
         title: text(entry.title),
         link: atomLink(entry.link),
-        summary: text(entry.summary) || text(entry.content),
+        // YouTube channel feeds keep the description in <media:group>.
+        summary: text(entry.summary) || text(entry.content) || text(entry['media:group']?.['media:description']),
         published: parseDate(entry.published ?? entry.updated),
         author: text(asArray(entry.author)[0]?.name),
       });
@@ -229,4 +267,22 @@ export function parseKev(json, feed, category, settings) {
     }
     return article;
   }).filter(Boolean);
+}
+
+// Feed-level metadata (title and homepage), used when adding a new source.
+export function feedMeta(xml) {
+  const doc = parser.parse(xml);
+  if (doc.rss?.channel) {
+    const ch = doc.rss.channel;
+    const link = asArray(ch.link).map(text).find((l) => /^https?:/i.test(l));
+    return { format: 'rss', title: htmlToText(text(ch.title)), site: safeUrl(link) };
+  }
+  if (doc.feed) {
+    return { format: 'atom', title: htmlToText(text(doc.feed.title)), site: safeUrl(atomLink(doc.feed.link)) };
+  }
+  if (doc['rdf:RDF']) {
+    const ch = doc['rdf:RDF'].channel || {};
+    return { format: 'rdf', title: htmlToText(text(ch.title)), site: safeUrl(text(ch.link)) };
+  }
+  return null;
 }

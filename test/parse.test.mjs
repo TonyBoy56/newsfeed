@@ -95,3 +95,31 @@ test('helpers', () => {
   assert.equal(htmlToText('a&nbsp;&#8217;b&#x27;'), 'a ’b\'');
   assert.deepEqual(extractCves('no cves'), []);
 });
+
+test('music and games sections use their own concept vocabulary', () => {
+  const xml = `<rss><channel><item><title>Patching a modular synth: sidechain compression tricks in Ableton</title>
+    <link>https://music.example/a</link><description>Free wavetable pack included.</description></item></channel></rss>`;
+  const [m] = parseXmlFeed(xml, feed, 'music-production', { ...settings, section: 'music' });
+  assert.equal(m.section, 'music');
+  assert.ok(m.concepts.includes('synthesis'));
+  assert.ok(m.concepts.includes('mixing'));
+  assert.ok(m.concepts.includes('DAW'));
+  assert.ok(m.concepts.includes('free stuff'));
+  assert.ok(!m.concepts.includes('patching'), 'security vocabulary must not leak into music');
+
+  const [g] = parseXmlFeed(xml.replace('Patching a modular synth: sidechain compression tricks in Ableton', 'Reverse engineering a kernel anti-cheat driver'),
+    feed, 'games-security', { ...settings, section: 'games' });
+  assert.deepEqual(g.concepts.sort(), ['anti-cheat', 'kernel & low-level', 'reverse engineering']);
+});
+
+test('reads YouTube channel feed descriptions', () => {
+  const xml = `<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+    <entry><title>Why this chord works</title><link rel="alternate" href="https://www.youtube.com/watch?v=abc"/>
+      <published>2026-09-20T10:00:00+00:00</published>
+      <media:group><media:title>Why this chord works</media:title><media:description>A look at borrowed chords.</media:description></media:group>
+    </entry></feed>`;
+  const [a] = parseXmlFeed(xml, feed, 'music-theory', { ...settings, section: 'music' });
+  assert.equal(a.url, 'https://www.youtube.com/watch?v=abc');
+  assert.equal(a.summary, 'A look at borrowed chords.');
+  assert.ok(a.concepts.includes('theory'));
+});
