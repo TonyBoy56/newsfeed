@@ -1,0 +1,19 @@
+{
+  "name": "newsfeed",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A personal, security-focused news reader built from RSS feeds.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "fetch": "node scripts/fetch-feeds.mjs",
+    "start": "node scripts/serve.mjs",
+    "dev": "npm run fetch && npm run start",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "fast-xml-parser": "5.11.1"
+  }
+}

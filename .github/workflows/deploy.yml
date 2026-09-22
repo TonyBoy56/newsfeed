@@ -1,0 +1,67 @@
+# Fetches every feed in feeds.json and publishes the reader to GitHub Pages.
+# Runs every 3 hours, on every push to main, and on demand (Actions tab →
+# "Fetch feeds and deploy" → Run workflow).
+
+name: Fetch feeds and deploy
+
+on:
+  schedule:
+    - cron: '17 */3 * * *' # minute 17 to avoid the top-of-hour rush
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: nothing by default, and each job asks only for what it needs.
+permissions: {}
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false # don't leave the token in .git/config
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      # --ignore-scripts: dependencies can't run install hooks on the runner.
+      - run: npm ci --ignore-scripts
+
+      - run: npm test
+
+      - id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Fetch feeds
+        run: npm run fetch
+        env:
+          # Merge with what's already published so history carries over.
+          PREVIOUS_DATA_URL: ${{ steps.pages.outputs.base_url }}/data/articles.json
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pages: write    # publish to Pages
+      id-token: write # prove the deployment came from this workflow
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

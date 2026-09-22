@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!--
+    Content Security Policy: the browser refuses to run any script, style or
+    connection that isn't listed here. Inline scripts are blocked, and
+    Trusted Types stops unsafe HTML sinks like innerHTML from being used at all.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light dark">
+  <title>Signal · Security Newsfeed</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#list">Skip to articles</a>
+
+  <div class="shell">
+    <aside class="sidebar" id="sidebar" aria-label="Filters">
+      <div class="brand">
+        <img src="favicon.svg" alt="" width="28" height="28">
+        <div>
+          <div class="brand-name">Signal</div>
+          <div class="brand-sub" id="updated">Loading…</div>
+        </div>
+      </div>
+
+      <nav class="group" aria-label="Views">
+        <div class="group-title">Views</div>
+        <ul class="nav" id="views"></ul>
+      </nav>
+
+      <nav class="group" aria-label="Categories">
+        <div class="group-title">Categories</div>
+        <ul class="nav" id="categories"></ul>
+      </nav>
+
+      <section class="group" aria-label="Concepts">
+        <div class="group-title">Concepts</div>
+        <div class="chips" id="concepts"></div>
+      </section>
+
+      <section class="group learning" aria-label="Your learning">
+        <div class="group-title">This week</div>
+        <div class="stats" id="stats"></div>
+      </section>
+
+      <div class="sidebar-foot">
+        <button class="link-btn" id="open-sources" type="button">Sources</button>
+        <button class="link-btn" id="open-data" type="button">Your data</button>
+        <button class="link-btn" id="open-help" type="button">Shortcuts</button>
+        <button class="link-btn" id="theme-toggle" type="button">Theme</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="toolbar">
+        <button class="icon-btn menu-btn" id="menu-btn" type="button" aria-label="Open filters" aria-controls="sidebar" aria-expanded="false">☰</button>
+        <div class="search">
+          <input id="search" type="search" placeholder="Search titles, summaries, CVEs, notes…  ( / )" autocomplete="off" aria-label="Search articles">
+        </div>
+        <select id="sort" aria-label="Sort">
+          <option value="new">Newest</option>
+          <option value="old">Oldest</option>
+          <option value="source">Source</option>
+        </select>
+      </header>
+
+      <div class="context" id="context"></div>
+      <div class="list" id="list" role="feed" aria-busy="true"></div>
+      <div class="more" id="more"></div>
+    </main>
+  </div>
+
+  <dialog id="dialog" aria-labelledby="dialog-title">
+    <div class="dialog-head">
+      <h2 id="dialog-title"></h2>
+      <button class="icon-btn" id="dialog-close" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="dialog-body" id="dialog-body"></div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <input type="file" id="import-file" accept="application/json,.json" hidden>
+</body>
+</html>
