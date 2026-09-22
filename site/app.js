@@ -558,18 +558,71 @@ function openDialog(title, ...body) {
 }
 
 function showSources() {
-  const cats = new Map(data.categories.map((c) => [c.id, `${sectionById(c.section)?.name || ''} › ${c.name}`]));
-  const ok = data.sources.filter((s) => s.ok).length;
+  // Start from whatever you're looking at in the main view.
+  const filter = {
+    topic: ui.category ? `cat:${ui.category}` : ui.section ? `sec:${ui.section}` : 'all',
+    status: 'all',
+    query: '',
+  };
+  const sectionOfSource = (src) => src.section || catById.get(src.category)?.section || 'security';
+  const matchesTopic = (src) => {
+    if (filter.topic.startsWith('sec:')) return sectionOfSource(src) === filter.topic.slice(4);
+    if (filter.topic.startsWith('cat:')) return src.category === filter.topic.slice(4);
+    return true;
+  };
+  const matches = (src) => {
+    if (!matchesTopic(src)) return false;
+    if (filter.status === 'ok' && !src.ok) return false;
+    if (filter.status === 'failed' && src.ok) return false;
+    return !filter.query || src.name.toLowerCase().includes(filter.query);
+  };
+
+  const topic = h('select', { id: 'src-topic', 'aria-label': 'Filter by topic' },
+    h('option', { value: 'all' }, 'All topics'),
+    ...data.sections.map((sec) => h('optgroup', { label: sec.name },
+      h('option', { value: `sec:${sec.id}` }, `All of ${sec.name}`),
+      ...data.categories.filter((c) => c.section === sec.id).map((c) => h('option', { value: `cat:${c.id}` }, c.name)))));
+  topic.value = filter.topic;
+  const search = h('input', { type: 'search', placeholder: 'Find a source…', 'aria-label': 'Find a source', autocomplete: 'off' });
+  const statusSeg = h('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'Filter by status' });
+  const summary = h('p', {});
+  const list = h('div', { class: 'source-groups' });
+
+  const render = () => {
+    const shown = data.sources.filter(matches);
+    const failed = data.sources.filter((src) => !src.ok && matchesTopic(src)).length;
+    put(statusSeg, ...[['all', 'All'], ['ok', 'Working'], ['failed', `Failed (${failed})`]].map(([value, label]) =>
+      h('button', { type: 'button', role: 'radio', 'aria-checked': String(filter.status === value),
+        onclick: () => { filter.status = value; render(); } }, label)));
+    summary.textContent = `Showing ${shown.length} of ${data.sources.length} sources` +
+      (data.generatedAt ? ` · last updated ${timeAgo(data.generatedAt)}` : '') + '. To remove one, delete it from feeds.json in the repository.';
+
+    // Group what's shown by subcategory, in sidebar order.
+    const groups = data.categories.map((c) => ({ c, items: shown.filter((src) => src.category === c.id) })).filter((g) => g.items.length);
+    put(list, groups.length ? groups.map(({ c, items }) => h('section', { class: 'source-group' },
+      h('h3', {}, `${sectionById(c.section)?.name || ''} › ${c.name}`, h('span', { class: 'count' }, ` ${items.length}`)),
+      h('ul', { class: 'row-list' }, ...items.map((src) => {
+        const href = safeHref(src.site);
+        return h('li', {},
+          h('span', {}, href ? h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, src.name) : src.name),
+          src.ok ? h('span', { class: 'status-ok' }, `${src.count} item${src.count === 1 ? '' : 's'}`)
+            : h('span', { class: 'status-bad', title: src.error || '' }, src.error ? `failed: ${src.error}` : 'failed'));
+      }))))
+      : h('div', { class: 'empty' }, h('strong', {}, 'No sources match'), 'Try another topic or status.'));
+  };
+
+  topic.addEventListener('change', () => { filter.topic = topic.value; render(); });
+  search.addEventListener('input', () => { filter.query = search.value.trim().toLowerCase(); render(); });
+  render();
+
   openDialog('Sources',
-    h('p', {}, `${ok} of ${data.sources.length} feeds fetched successfully${data.generatedAt ? `, ${timeAgo(data.generatedAt)}` : ''}. To remove a source, delete it from feeds.json in the repository.`),
-    h('div', { class: 'btn-row' }, h('button', { type: 'button', class: 'btn primary', onclick: () => showAddSource() }, '+ Add a source')),
-    h('ul', { class: 'row-list' }, ...data.sources.map((s) => {
-      const href = safeHref(s.site);
-      return h('li', {},
-        h('span', {}, href ? h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, s.name) : s.name,
-          h('span', { class: 'count' }, ` · ${cats.get(s.category) || s.category}`)),
-        s.ok ? h('span', { class: 'status-ok' }, `${s.count} items`) : h('span', { class: 'status-bad', title: s.error }, 'failed'));
-    })),
+    h('div', { class: 'source-filters' }, topic, statusSeg, search),
+    summary,
+    h('div', { class: 'btn-row' }, h('button', { type: 'button', class: 'btn primary', onclick: () => {
+      const cat = filter.topic.startsWith('cat:') ? filter.topic.slice(4) : null;
+      showAddSource(cat);
+    } }, '+ Add a source')),
+    list,
   );
 }
 

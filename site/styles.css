@@ -298,3 +298,14 @@ html[data-density="compact"] .summary {
 .note-box ol { margin: 4px 0 0; padding-left: 18px; }
 .add-link { color: var(--accent-text); font-weight: 500; }
 .nav .add-btn { color: var(--accent-text); font-size: 14px; justify-content: flex-start; }
+
+/* ---------- Sources dialog ---------- */
+.source-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.source-filters select, .source-filters input {
+  border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-sm); padding: 7px 10px;
+}
+.source-filters select { flex: 1 1 200px; }
+.source-filters input { flex: 1 1 100%; }
+.source-group h3 { font-size: 13px; margin: 16px 0 2px; color: var(--muted); font-weight: 600; }
+.source-group h3 .count { font-weight: 400; }
+.status-bad { max-width: 55%; text-align: right; overflow-wrap: anywhere; }
