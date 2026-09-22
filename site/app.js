@@ -11,7 +11,11 @@
 
 const STORE_KEY = 'signal:v1';
 // theme.js loads first (see index.html) and applies your saved colors.
-const Theme = window.SignalTheme;
+// If a browser serves a cached older page without theme.js, fall back to a
+// no-op theme so the reader still loads instead of breaking.
+const Theme = window.SignalTheme || {
+  PRESETS: {}, DEFAULTS: {}, sanitize: (a) => a || {}, apply: (a) => a, preview: () => ({}), isDark: () => false,
+};
 const PAGE_SIZE = 40;
 const DAY = 86_400_000;
 const ID_RE = /^[a-f0-9]{16}$/;
