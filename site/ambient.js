@@ -7,17 +7,31 @@
 // * it caps the frame rate and pixel density,
 // * it draws a single still frame if your system asks for reduced motion.
 
+import { MORE_SCENES, MORE_VIBES, VIBE_GROUPS as GROUPS } from './ambient-more.js?v=9';
+
+export const VIBE_GROUPS = ['Modes', ...GROUPS];
 export const VIBES = [
-  { id: 'off', name: 'Off', mood: 'Just the page' },
-  { id: 'aurora', name: 'Aurora', mood: 'Calm, drifting light' },
-  { id: 'constellation', name: 'Constellation', mood: 'Connected, a little techy' },
-  { id: 'coderain', name: 'Code rain', mood: 'Hacker-movie energy' },
-  { id: 'synthwave', name: 'Synthwave', mood: 'Retro neon, night drive' },
-  { id: 'waveform', name: 'Waveform', mood: 'Oscilloscope, studio glow' },
-  { id: 'starfield', name: 'Starfield', mood: 'Deep focus, warp speed' },
-  { id: 'lofi', name: 'Lo-fi rain', mood: 'Rainy window, study session' },
-  { id: 'fireflies', name: 'Fireflies', mood: 'Warm summer night' },
+  { id: 'off', name: 'Off', mood: 'Just the page', group: 'Modes' },
+  { id: 'shuffle', name: 'Shuffle', mood: 'A new vibe every 5 minutes', group: 'Modes' },
+  { id: 'topic', name: 'Match my topic', mood: 'Changes with what you read', group: 'Modes' },
+  { id: 'aurora', name: 'Aurora', mood: 'Calm, drifting light', group: 'Calm' },
+  { id: 'constellation', name: 'Constellation', mood: 'Connected, a little techy', group: 'Techy' },
+  { id: 'coderain', name: 'Code rain', mood: 'Hacker-movie energy', group: 'Techy' },
+  { id: 'synthwave', name: 'Synthwave', mood: 'Retro neon, night drive', group: 'Retro' },
+  { id: 'waveform', name: 'Waveform', mood: 'Oscilloscope, studio glow', group: 'Music' },
+  { id: 'starfield', name: 'Starfield', mood: 'Deep focus, warp speed', group: 'Space' },
+  { id: 'lofi', name: 'Lo-fi rain', mood: 'Rainy window, study session', group: 'Nature' },
+  { id: 'fireflies', name: 'Fireflies', mood: 'Warm summer night', group: 'Nature' },
+  ...MORE_VIBES,
 ];
+const SCENE_IDS = VIBES.map((v) => v.id).filter((id) => !['off', 'shuffle', 'topic'].includes(id));
+// "Match my topic": which vibes suit which section.
+const TOPIC_VIBES = {
+  security: ['radar', 'circuit', 'coderain', 'constellation', 'hexgrid'],
+  music: ['waveform', 'vinyl', 'spectrum', 'lofi'],
+  games: ['invaders', 'synthwave', 'tetris', 'dvd', 'plasma'],
+  default: ['aurora', 'nebula', 'ocean', 'galaxy', 'lavalamp'],
+};
 
 const INTENSITY = { subtle: 0.45, medium: 0.75, vivid: 1 };
 const SPEED = { slow: 0.5, normal: 1, fast: 1.7 };
@@ -322,6 +336,8 @@ const SCENES = {
   },
 };
 
+Object.assign(SCENES, MORE_SCENES);
+
 // Pointer position for interactive scenes (the canvas itself ignores clicks).
 const pointer = { x: 0, y: 0, inside: false };
 window.addEventListener('pointermove', (e) => { pointer.x = e.clientX; pointer.y = e.clientY; pointer.inside = true; }, { passive: true });
@@ -391,6 +407,18 @@ export class VibeRunner {
     this.raf = 0;
   }
 
+  /** Draw a still frame (a short burst of simulation), for quiet previews. */
+  snapshot(sceneId, settings, steps = 45) {
+    this.stop();
+    this.settings = { ...this.settings, ...settings };
+    this.colors = readColors();
+    this.scene = SCENES[sceneId] || null;
+    if (!this.scene || !this.resize()) return;
+    this.state = this.scene.init(this.w, this.h, this.colors);
+    this.scene.reset?.(this.ctx, this.w, this.h, this.colors);
+    for (let i = 0; i < steps; i++) this.frame(1 / 30);
+  }
+
   frame(dt) {
     const speed = SPEED[this.settings.vibeSpeed] ?? 1;
     const k = INTENSITY[this.settings.vibeIntensity] ?? 0.75;
@@ -413,14 +441,55 @@ export class VibeRunner {
 let bg = null;
 const DESKTOP = window.matchMedia?.('(min-width: 1024px)');
 
+let shuffleScene = null;
+let shuffleTimer = 0;
+let currentSection = null;
+const topicChoice = {};
+
+function resolveScene(vibe) {
+  if (vibe === 'shuffle') {
+    if (!shuffleScene) {
+      shuffleScene = pickDifferent(SCENE_IDS, shuffleScene);
+      clearInterval(shuffleTimer);
+      shuffleTimer = setInterval(() => {
+        shuffleScene = pickDifferent(SCENE_IDS, shuffleScene);
+        syncBackground(currentSettings());
+      }, 5 * 60 * 1000);
+    }
+    return shuffleScene;
+  }
+  clearInterval(shuffleTimer);
+  shuffleScene = null;
+  if (vibe === 'topic') {
+    const key = TOPIC_VIBES[currentSection] ? currentSection : 'default';
+    // Keep the same pick while you stay in a topic.
+    topicChoice[key] ||= TOPIC_VIBES[key][(Math.random() * TOPIC_VIBES[key].length) | 0];
+    return topicChoice[key];
+  }
+  return vibe;
+}
+
+function pickDifferent(list, not) {
+  const options = list.filter((x) => x !== not);
+  return options[(Math.random() * options.length) | 0];
+}
+
 function syncBackground(settings) {
   const canvas = document.getElementById('ambient');
   if (!canvas) return;
   bg ||= new VibeRunner(canvas, { fullscreen: true });
   const on = settings.vibe !== 'off' && DESKTOP?.matches && !document.hidden;
   canvas.hidden = !on;
-  if (on) bg.set(settings.vibe, settings); else { bg.stop(); bg.clear(); bg.scene = null; }
+  if (on) bg.set(resolveScene(settings.vibe), settings); else { bg.stop(); bg.clear(); bg.scene = null; }
 }
+
+// The app tells us which topic you're looking at (for "Match my topic").
+document.addEventListener('signal-section', (e) => {
+  const next = e.detail || null;
+  if (next === currentSection) return;
+  currentSection = next;
+  if (currentSettings().vibe === 'topic') syncBackground(currentSettings());
+});
 
 const currentSettings = () => window.SignalTheme?.current || { vibe: 'off' };
 

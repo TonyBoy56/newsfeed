@@ -148,20 +148,28 @@ Click **◐** in the toolbar, **Appearance** in the sidebar, or press `t`. Pick 
 
 ### Background vibes
 
-On desktop, an animation can fill the empty space around your articles, drawn in your theme colors. Choose one in **Appearance → Background vibe**; each has a live preview.
+On desktop, an animation can fill the empty space around your articles, drawn in your theme colors. Choose one in **Appearance → Background vibe**. Cards show a still preview and come alive when you hover them.
 
-| Vibe | Mood |
+**27 vibes in 7 moods:**
+
+| Mood | Vibes |
 |---|---|
-| Aurora | Calm, drifting light |
-| Constellation | Connected nodes that reach toward your cursor |
-| Code rain | Hacker-movie energy |
-| Synthwave | Retro neon sun and grid |
-| Waveform | Oscilloscope and equalizer |
-| Starfield | Warp-speed focus |
-| Lo-fi rain | Rainy window, study session |
-| Fireflies | Warm summer night |
+| Calm | Aurora, Ocean, Lava lamp, Bubbles |
+| Nature | Fireflies, Lo-fi rain, Snowfall, Sakura |
+| Techy | Constellation (follows your cursor), Code rain, Radar, Circuit, Hex grid |
+| Space | Starfield, Galaxy, Nebula |
+| Music | Waveform, Vinyl, Spectrum |
+| Retro | Synthwave, Plasma, Invaders, Blocks, DVD bounce |
+| Trippy | Flow field, Kaleidoscope, Tunnel |
 
-You can also set intensity, speed, and placement: **Right side** fades in away from what you read, or **Everywhere**. **Page width → Leave room** narrows the reading area on wide screens so the vibe has space. It's off on phones and pauses when the tab is hidden. If your system asks for reduced motion, it shows a still frame instead. The code is in `site/ambient.js`, with one small function per scene, so it's easy to add your own.
+**Modes:**
+
+- **Shuffle:** a new vibe every 5 minutes.
+- **Match my topic:** changes with what you're reading. Security gets Radar, Circuit and friends; Music gets Vinyl, Spectrum and friends; Games gets Invaders, Synthwave and friends.
+
+You can also set intensity, speed, and placement: **Right side** fades in away from what you read, or **Everywhere**. **Page width → Leave room** narrows the reading area on wide screens so the vibe has space. It's off on phones and pauses when the tab is hidden. If your system asks for reduced motion, it shows a still frame instead.
+
+To add your own vibe, write an `init` and `draw` function in `site/ambient-more.js`, add it to `MORE_VIBES`, and add its id to the `vibe` list in `site/theme.js`.
 
 ## Customize your sources by hand
 
@@ -237,7 +245,8 @@ site/                        the reader (plain HTML, CSS, JS; no build step)
 site/theme.js                palette generator with contrast checks
 site/concept-graph.js        the concept map behind "only related articles"
 site/topic-catalog.js        suggested sources for new topics
-site/ambient.js              background vibe animations
+site/ambient.js              background vibe engine + first 8 vibes
+site/ambient-more.js         19 more vibes
 test/                        parser and security tests (npm test)
 .github/workflows/           scheduled fetch + deploy, and PR checks
 ```

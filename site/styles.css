@@ -441,3 +441,5 @@ body { background: var(--bg); }
 .swatch.vibe .label { align-items: flex-start; }
 .swatch.vibe .label small { display: block; font-weight: 400; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
 dialog { width: min(720px, calc(100vw - 32px)); }
+.vibe-groups { padding: 0; margin: 4px 0 12px; }
+.vibe-icon { display: grid !important; place-items: center; font-size: 30px; color: var(--accent-text); background: var(--accent-soft) !important; }

@@ -9,9 +9,9 @@
 // * Your reading history, saves and notes live only in this browser's
 //   localStorage. Nothing is sent anywhere.
 
-import { GRAPH } from './concept-graph.js?v=8';
-import { CATALOG, suggestTopics } from './topic-catalog.js?v=8';
-import { VIBES, VibeRunner } from './ambient.js?v=8';
+import { GRAPH } from './concept-graph.js?v=9';
+import { CATALOG, suggestTopics } from './topic-catalog.js?v=9';
+import { VIBES, VIBE_GROUPS, VibeRunner } from './ambient.js?v=9';
 
 const STORE_KEY = 'signal:v1';
 // theme.js loads first (see index.html) and applies your saved colors.
@@ -840,6 +840,8 @@ function pruneStore() {
 }
 
 function refresh() {
+  // Lets the "Match my topic" background vibe follow what you're reading.
+  document.dispatchEvent(new CustomEvent('signal-section', { detail: ui.section || catById.get(ui.category)?.section || null }));
   visible = computeVisible();
   if (ui.active >= Math.min(visible.length, ui.limit)) ui.active = -1;
   renderSidebar();
@@ -1018,6 +1020,7 @@ function stopPreviews() { appearancePreviews.forEach((r) => r.stop()); appearanc
 
 function showAppearance() {
   const body = h('div', {});
+  let vibeGroup = VIBES.find((v) => v.id === store.prefs.appearance.vibe)?.group || 'All';
   let previews = [];
   const render = () => {
     const scrollTop = $('#dialog-body').scrollTop;
@@ -1063,15 +1066,23 @@ function showAppearance() {
       row('Corners', null, seg('corners', [['square', 'Square'], ['soft', 'Soft'], ['round', 'Round']])),
       h('h3', {}, 'Background vibe'),
       h('p', {}, 'An animation in the empty space around your articles, in your theme colors. Desktop only, and it pauses when the tab is hidden.'),
-      h('div', { class: 'vibes', role: 'radiogroup', 'aria-label': 'Background vibe' }, ...VIBES.map((v) => {
-        const selected = a.vibe === v.id;
-        const canvas = h('canvas', { class: 'vibe-canvas', 'aria-hidden': 'true' });
-        if (v.id !== 'off') previews.push([canvas, v.id]);
-        return h('button', {
-          type: 'button', class: 'swatch vibe', role: 'radio', 'aria-checked': String(selected), 'aria-label': `${v.name}: ${v.mood}`,
-          onclick: () => { setAppearance({ vibe: v.id }); renderRef(); },
-        }, canvas, h('div', { class: 'label' }, h('span', {}, v.name, h('small', {}, v.mood)), selected ? h('span', { class: 'check' }, '✓') : null));
-      })),
+      h('div', { class: 'chips vibe-groups', role: 'tablist', 'aria-label': 'Vibe groups' },
+        ...['All', ...VIBE_GROUPS].map((g) => h('button', {
+          type: 'button', class: 'chip', role: 'tab', 'aria-pressed': String(vibeGroup === g),
+          onclick: () => { vibeGroup = g; renderRef(); },
+        }, g === 'All' ? `All ${VIBES.length - 3}` : g))),
+      h('div', { class: 'vibes', role: 'radiogroup', 'aria-label': 'Background vibe' },
+        ...VIBES.filter((v) => vibeGroup === 'All' || v.group === vibeGroup).map((v) => {
+          const selected = a.vibe === v.id;
+          const special = { off: '○', shuffle: '⤮', topic: '◎' }[v.id];
+          const face = special ? h('div', { class: 'vibe-canvas vibe-icon', 'aria-hidden': 'true' }, special)
+            : h('canvas', { class: 'vibe-canvas', 'aria-hidden': 'true' });
+          if (!special) previews.push([face, v.id, selected]);
+          return h('button', {
+            type: 'button', class: 'swatch vibe', role: 'radio', 'aria-checked': String(selected), 'aria-label': `${v.name}: ${v.mood}`,
+            onclick: () => { setAppearance({ vibe: v.id }); renderRef(); },
+          }, face, h('div', { class: 'label' }, h('span', {}, v.name, h('small', {}, v.mood)), selected ? h('span', { class: 'check' }, '✓') : null));
+        })),
       row('Intensity', 'Subtle keeps it in the background', seg('vibeIntensity', [['subtle', 'Subtle'], ['medium', 'Medium'], ['vivid', 'Vivid']])),
       row('Speed', null, seg('vibeSpeed', [['slow', 'Slow'], ['normal', 'Normal'], ['fast', 'Fast']])),
       row('Where', 'Right side keeps it away from what you read', seg('vibePlace', [['side', 'Right side'], ['full', 'Everywhere']])),
@@ -1082,10 +1093,19 @@ function showAppearance() {
     $('#dialog-body').scrollTop = scrollTop;
   };
   const startPreviews = () => {
-    // Tiny live previews, only while this dialog is open.
-    appearancePreviews = previews.map(([canvas, id]) => {
+    // Previews are still frames, so 30 of them stay cheap. The selected one
+    // animates, and any card comes alive while you hover or focus it.
+    appearancePreviews = previews.map(([canvas, id, selected]) => {
       const r = new VibeRunner(canvas);
-      r.set(id, { ...store.prefs.appearance, vibeIntensity: 'vivid' });
+      const opts = { ...store.prefs.appearance, vibeIntensity: 'vivid' };
+      if (selected) r.set(id, opts); else r.snapshot(id, opts);
+      const card = canvas.closest('.swatch');
+      const live = () => { if (!r.raf) r.set(id, opts); };
+      const still = () => { if (!selected) r.stop(); };
+      card.addEventListener('pointerenter', live);
+      card.addEventListener('focus', live);
+      card.addEventListener('pointerleave', still);
+      card.addEventListener('blur', still);
       return r;
     });
   };
