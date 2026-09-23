@@ -118,7 +118,7 @@ a { color: inherit; }
 .link-btn:hover { color: var(--text); text-decoration: underline; }
 
 /* ---------- Main ---------- */
-.main { min-width: 0; padding: 0 28px 48px; max-width: 900px; }
+.main { min-width: 0; width: 100%; max-width: 1840px; padding: 0 clamp(16px, 2.6vw, 40px) 48px; }
 .toolbar {
   position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center;
   padding: 16px 0 12px; background: var(--bg);
@@ -141,7 +141,14 @@ select { width: auto; cursor: pointer; }
 .context p { margin: 0; color: var(--muted); font-size: 13px; flex-basis: 100%; }
 .context .clear { font-size: 13px; }
 
-.list { display: grid; gap: 10px; }
+.list { display: grid; gap: 12px; }
+/* Wide screens: cards flow into as many readable columns as fit (each at
+   least 380px), so the page fills the screen without stretching lines. */
+.list:not(.front) { grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); align-items: start; }
+.list:not(.front) > .empty { grid-column: 1 / -1; }
+/* Front page: one column per topic side by side when there's room. */
+.list.front { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; gap: 20px; }
+.list.front > .welcome-card { grid-column: 1 / -1; margin-bottom: 0; }
 .card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 14px 16px; box-shadow: var(--shadow); position: relative;
@@ -309,3 +316,107 @@ html[data-density="compact"] .summary {
 .source-group h3 { font-size: 13px; margin: 16px 0 2px; color: var(--muted); font-weight: 600; }
 .source-group h3 .count { font-weight: 400; }
 .status-bad { max-width: 55%; text-align: right; overflow-wrap: anywhere; }
+
+/* ---------- Front page ("For you") ---------- */
+.context .seg { align-self: center; }
+.front-group { display: grid; gap: 10px; }
+.front-group { align-content: start; }
+.front-head { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 2px 0; }
+.front-head h2 { font-size: calc(13px * var(--fs, 1)); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0; }
+.why { margin-top: 8px; font-size: 12.5px; color: var(--accent-text); }
+.welcome-card {
+  background: var(--accent-soft); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 8px;
+}
+.welcome-card strong { font-size: 16px; }
+.welcome-card p { margin: 4px 0 12px; color: var(--text); font-size: 14px; }
+
+/* ---------- Interests dialog ---------- */
+.interest-section { padding: 4px 0 14px; border-bottom: 1px solid var(--border); }
+.interest-section h3 { margin-top: 12px; font-size: 15px; }
+.interest-label { font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 6px; }
+.interest-section .chips { padding: 0; }
+.interest-section input {
+  width: 100%; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-sm); padding: 8px 12px;
+}
+.dialog-body .form { margin-top: 14px; }
+
+@media (min-width: 1600px) {
+  .shell { grid-template-columns: 288px minmax(0, 1fr); }
+}
+/* Mid-size screens: three topic columns won't fit, and 2 + 1 looks lopsided. */
+@media (max-width: 1180px) {
+  .list.front { grid-template-columns: minmax(0, 1fr); }
+}
+
+.card-actions { display: inline-flex; gap: 2px; margin-left: auto; white-space: nowrap; }
+
+/* ---------- Interests filter ---------- */
+.scope-toggle {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface);
+  border-radius: 999px; padding: 3px 11px 3px 8px; font-size: 13px; cursor: pointer; color: var(--muted); align-self: center;
+}
+.scope-toggle .dot-ind { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.scope-toggle[aria-pressed="true"] { color: var(--accent-text); border-color: var(--accent); background: var(--accent-soft); }
+.scope-toggle[aria-pressed="true"] .dot-ind { background: var(--accent); }
+.prompt-card {
+  border: 1px dashed var(--accent); border-radius: var(--radius); padding: 16px; background: var(--surface);
+}
+.prompt-card strong { display: block; margin-bottom: 4px; }
+.prompt-card p { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+.list > .prompt-card { grid-column: 1 / -1; max-width: 640px; }
+.empty.small { padding: 20px 14px; font-size: 14px; }
+.empty.small strong { font-size: 14px; }
+.empty .link-btn { font-size: inherit; color: var(--accent-text); text-decoration: underline; }
+
+/* ---------- Interests dialog: depth & preview ---------- */
+.interest-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.match-count { font-size: 12.5px; color: var(--accent-text); font-weight: 600; }
+.match-count.none { color: var(--muted); font-weight: 400; }
+.layers { margin: 8px 0 2px; font-size: 13px; color: var(--muted); }
+.layers summary { cursor: pointer; color: var(--accent-text); }
+.layer { margin: 6px 0 0 4px; line-height: 1.5; }
+.layer-n { display: inline-block; min-width: 56px; font-weight: 600; color: var(--text); }
+.seg button { white-space: nowrap; }
+
+/* ---------- Profile ---------- */
+.avatar {
+  display: inline-grid; place-items: center; border-radius: 50%; background: var(--accent); color: var(--surface);
+  font-weight: 700; flex: none; letter-spacing: 0.02em;
+}
+.avatar.lg { width: 72px; height: 72px; font-size: 26px; }
+.avatar.sm { width: 22px; height: 22px; font-size: 10px; }
+.list.profile { grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); align-items: start; }
+.profile-card, .profile-panel {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px;
+}
+.profile-card { grid-column: 1 / -1; display: flex; gap: 18px; align-items: center; }
+.profile-fields { flex: 1; display: grid; gap: 8px; min-width: 0; }
+.profile-fields input {
+  width: 100%; border: 1px solid transparent; background: none; border-radius: var(--radius-sm); padding: 4px 8px; margin-left: -8px;
+}
+.profile-fields input:hover, .profile-fields input:focus { border-color: var(--border); background: var(--bg); }
+.profile-fields input:first-child { font-size: 22px; font-weight: 700; }
+.profile-fields .hint, .profile-panel .hint { font-size: 13px; color: var(--muted); margin: 0; }
+.profile-panel h2 { font-size: 15px; margin: 0 0 12px; }
+.profile-panel h3 { font-size: 13px; color: var(--muted); margin: 16px 0 8px; }
+.profile-panel .front-head { margin: 0 0 6px; align-items: center; }
+.profile-panel .front-head h2 { margin: 0; text-transform: none; letter-spacing: 0; color: var(--text); font-size: 15px; }
+.stats.wide { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); padding: 0; }
+.chip.static { cursor: default; }
+.chip.static:hover { border-color: var(--border); }
+.interest-summary { padding: 10px 0; border-top: 1px solid var(--border); display: grid; gap: 6px; }
+.interest-summary:first-of-type { border-top: 0; }
+.interest-summary .chips { padding: 0; }
+@media (max-width: 520px) {
+  .profile-card { flex-direction: column; align-items: flex-start; }
+}
+
+/* ---------- New topic dialog ---------- */
+.suggest-box { display: grid; gap: 10px; }
+.suggest-box .hint { margin: 0; font-size: 13px; color: var(--muted); }
+.check-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.check-list li { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.check-list input { width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+.check-list label { cursor: pointer; font-size: 14px; }
+.form textarea { width: 100%; min-height: 80px; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-sm); padding: 8px 12px; resize: vertical; }
+.form details .field { margin-top: 10px; }

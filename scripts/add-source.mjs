@@ -16,7 +16,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseXmlFeed, feedMeta, extractConcepts, htmlToText, truncate, CONCEPT_SETS } from './lib/parse.mjs';
+import { parseXmlFeed, feedMeta, extractConcepts, htmlToText, truncate, CONCEPT_SETS, registerCustomConcepts } from './lib/parse.mjs';
 import { fetchText } from './lib/http.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -231,6 +231,7 @@ async function loadExistingArticles() {
 async function main() {
   const input = parseArgs(process.argv.slice(2));
   const config = JSON.parse(await readFile(FEEDS_FILE, 'utf8'));
+  registerCustomConcepts(config);
   const categories = flattenCategories(config).map((c) => ({ ...c, concepts: CONCEPT_SETS[c.section] }));
 
   const chosen = findCategory(categories, input.category);

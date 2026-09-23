@@ -1,5 +1,6 @@
-# Adds a source when you submit the "Add a source" issue form (the in-app
-# "Add source" button takes you there with everything filled in).
+# Adds a source, or creates a whole new topic, when you submit the matching
+# issue form. The in-app "+ Add a source" and "+ New topic" buttons take you
+# there with everything filled in.
 #
 # Security notes, because issue-triggered workflows are a classic attack path:
 # * Only issues opened by the repo owner are processed. Anyone can open an
@@ -26,7 +27,7 @@ jobs:
   add:
     if: >-
       github.event.issue.user.login == github.repository_owner &&
-      startsWith(github.event.issue.title, '[Add source]')
+      (startsWith(github.event.issue.title, '[Add source]') || startsWith(github.event.issue.title, '[New topic]'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -46,9 +47,16 @@ jobs:
 
       - run: npm ci --ignore-scripts
 
-      - name: Add and sort the source
-        run: node scripts/add-source.mjs --from-issue
+      - name: Add the source or create the topic
+        run: |
+          case "$ISSUE_TITLE" in
+            "[New topic]"*) node scripts/add-topic.mjs --from-issue ;;
+            *) node scripts/add-source.mjs --from-issue ;;
+          esac
         env:
+          # Both come from the issue, so they only ever reach the shell as
+          # quoted environment variables.
+          ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           DATA_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/data/articles.json
           RESULT_FILE: ${{ runner.temp }}/result.md
@@ -81,5 +89,5 @@ jobs:
           if [ -f "$RUNNER_TEMP/result.md" ] && grep -q "^❌" "$RUNNER_TEMP/result.md"; then
             gh issue comment "$ISSUE_NUMBER" --body-file "$RUNNER_TEMP/result.md"
           else
-            gh issue comment "$ISSUE_NUMBER" --body "❌ Something went wrong adding this source. Open the Actions tab for details."
+            gh issue comment "$ISSUE_NUMBER" --body "❌ Something went wrong. Open the Actions tab for details."
           fi

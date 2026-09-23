@@ -158,8 +158,32 @@ export const CONCEPT_SETS = {
 
 export function extractConcepts(section, ...parts) {
   const hay = parts.join(' ');
-  const set = CONCEPT_SETS[section] ?? CONCEPT_SETS.security;
+  const set = section ? (CONCEPT_SETS[section] ?? {}) : CONCEPT_SETS.security;
   return Object.entries(set).filter(([, re]) => re.test(hay)).map(([k]) => k);
+}
+
+// Topics you create in the app carry their own vocabulary in feeds.json:
+//   "concepts": { "agents": ["agent", "agentic"], "CSS": ["css", "flexbox"] }
+// Same term rules as the app: whole words, "*" means "starts with".
+function termRegex(terms) {
+  const parts = terms.filter((t) => typeof t === 'string' && t.trim()).map((t) => {
+    const lower = t.trim().toLowerCase().slice(0, 60);
+    const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return lower.endsWith('*') ? `${esc(lower.slice(0, -1))}[a-z0-9]*` : `${esc(lower)}(?:s|es|ed|ing|er|ers)?`;
+  });
+  return parts.length ? new RegExp(`(?:^|[^a-z0-9])(?:${parts.join('|')})(?![a-z0-9])`, 'i') : null;
+}
+
+export function registerCustomConcepts(config) {
+  for (const sec of config.sections ?? []) {
+    if (CONCEPT_SETS[sec.id] || !sec.concepts || typeof sec.concepts !== 'object') continue;
+    const set = {};
+    for (const [label, terms] of Object.entries(sec.concepts).slice(0, 40)) {
+      const re = termRegex(Array.isArray(terms) && terms.length ? terms : [label]);
+      if (re) set[label.slice(0, 40)] = re;
+    }
+    CONCEPT_SETS[sec.id] = set;
+  }
 }
 
 export function articleId(link, title) {

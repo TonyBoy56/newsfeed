@@ -13,7 +13,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseXmlFeed, parseKev, safeUrl } from './lib/parse.mjs';
+import { parseXmlFeed, parseKev, safeUrl, CONCEPT_SETS, registerCustomConcepts } from './lib/parse.mjs';
 import { fetchText } from './lib/http.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -65,6 +65,7 @@ async function loadPrevious() {
 async function main() {
   const config = JSON.parse(await readFile(FEEDS_FILE, 'utf8'));
   const settings = { maxItemsPerFeed: 25, maxAgeDays: 30, summaryLength: 320, ...config.settings };
+  registerCustomConcepts(config);
 
   // feeds.json groups categories into sections (Security, Music, Games…).
   // An older flat "categories" list still works and is treated as Security.
@@ -114,7 +115,8 @@ async function main() {
   const output = {
     generatedAt: fetchedAt,
     repo, // lets the app link to GitHub for "Add source"
-    sections: sections.map(({ id, name, description }) => ({ id, name, description: description || '' })),
+    // Each section's concept vocabulary, so the app can offer it in "Your interests".
+    sections: sections.map(({ id, name, description }) => ({ id, name, description: description || '', concepts: Object.keys(CONCEPT_SETS[id] || {}) })),
     categories: categories.map(({ id, name, description, section }) => ({ id, name, description: description || '', section })),
     sources: results.map((r) => ({
       name: r.feed.name,

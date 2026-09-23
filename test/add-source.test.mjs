@@ -45,3 +45,25 @@ test('SSRF guard blocks private and non-http targets', async () => {
     await assert.rejects(assertPublicUrl(bad), `should reject ${bad}`);
   }
 });
+
+test('parses the New topic issue form and builds a section', async () => {
+  const { parseTopicIssue, buildSection } = await import('../scripts/add-topic.mjs');
+  const body = '### Topic name\n\nAI & Machine Learning\n\n### Description (optional)\n\n_No response_\n\n### Subtopics (comma separated, optional)\n\nResearch & News, Practitioners\n\n### Sources (one per line)\n\nhttps://importai.substack.com/feed | Research & News\nhttps://simonwillison.net/\n\n### Concepts to track (one per line, optional)\n\nagents: agent, agentic\nLLMs\n';
+  const input = parseTopicIssue(body);
+  assert.equal(input.name, 'AI & Machine Learning');
+  assert.deepEqual(input.subtopics, ['Research & News', 'Practitioners']);
+  assert.deepEqual(input.sources[0], { url: 'https://importai.substack.com/feed', subtopic: 'Research & News' });
+  assert.deepEqual(input.concepts, { agents: ['agent', 'agentic'], LLMs: ['llms'] });
+  const sec = buildSection(input, config);
+  assert.equal(sec.id, 'ai-machine-learning');
+  assert.deepEqual(sec.categories.map((c) => c.id), ['ai-machine-learning-research-news', 'ai-machine-learning-practitioners']);
+  assert.throws(() => buildSection({ ...input, name: 'Security' }, config), /already a topic/);
+  assert.throws(() => buildSection({ ...input, name: '  ' }, config), /needs a name/);
+});
+
+test('custom topic concepts tag articles in that topic only', async () => {
+  const { registerCustomConcepts, extractConcepts } = await import('../scripts/lib/parse.mjs');
+  registerCustomConcepts({ sections: [{ id: 'test-ai', concepts: { agents: ['agent', 'agentic'], training: ['fine-tun*'] } }] });
+  assert.deepEqual(extractConcepts('test-ai', 'Fine-tuning agentic models'), ['agents', 'training']);
+  assert.deepEqual(extractConcepts('test-ai', 'A story about reagents'), []);
+});

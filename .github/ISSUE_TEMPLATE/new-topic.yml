@@ -1,0 +1,39 @@
+# The in-app "+ New topic" button opens this form with the fields filled in.
+# Submitting it runs .github/workflows/add-source.yml, which creates the
+# topic in feeds.json, checks and files each source, and replies here.
+name: New topic
+description: Add a new topic to Signal, with its first sources.
+title: "[New topic] "
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Topic name
+      placeholder: e.g. AI & Machine Learning
+    validations:
+      required: true
+  - type: input
+    id: description
+    attributes:
+      label: Description (optional)
+  - type: input
+    id: subtopics
+    attributes:
+      label: Subtopics (comma separated, optional)
+      placeholder: e.g. Research & News, Practitioners
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources (one per line)
+      description: A feed, a website or a YouTube channel. Add "| Subtopic" to choose where it goes.
+      placeholder: |
+        https://simonwillison.net/atom/everything/ | Practitioners
+        https://example.com
+  - type: textarea
+    id: concepts
+    attributes:
+      label: Concepts to track (one per line, optional)
+      description: '"label" or "label: word, word". These become the choices in Your interests.'
+      placeholder: |
+        agents: agent, agentic
+        evaluation: eval, benchmark

@@ -10,6 +10,10 @@ Signal pulls 50 hand-picked sources into one fast, private reader, across three 
 - **CVE links:** every CVE ID mentioned links straight to the National Vulnerability Database. CISA's Known Exploited Vulnerabilities catalog is built in.
 - **Notebook:** write notes with learning prompts ("Key takeaway", "How I would detect this"), add your own tags, and review everything in one place.
 - **Private by design:** your saves and notes never leave your browser. Export and import lets you back them up or move them.
+- **Only what you care about:** pick what you want to learn per topic, and only articles related to those interests (1–3 steps out on a concept map) appear. **Home → For you** shows the best 3 per topic, each with a reason.
+- **Your own topics:** create new topics in the app, with suggested sources or your own.
+- **A profile page:** your goal, reading streak, top concepts and interests.
+- **Fits any screen:** cards flow into as many readable columns as fit, from one on a phone to several on a wide monitor.
 - **Add sources in two clicks:** paste a website, feed or YouTube channel, and it's checked and sorted into the right subcategory for you.
 - **Make it yours:** 8 color themes plus any color you pick, light/dark/auto, text size, density and corner style.
 - **Keyboard-friendly:** `j`/`k` to move, `s` to save, `n` to write a note, `/` to search, `?` for all shortcuts.
@@ -99,6 +103,45 @@ git add feeds.json && git commit -m "Add source" && git push
 
 **How auto-sort works:** it reads the new source's latest posts and compares their words with each subcategory's name, description, `keywords` and the articles already in it. The comparison uses TF-IDF cosine similarity, a classic text-matching technique. It gets smarter as your feed grows. To steer it, edit a category's `"keywords"` in `feeds.json`.
 
+## Your interests: only what's related
+
+Open **Your interests** (sidebar, or press `i`). For each topic, pick the concepts you want to learn, add any specific words or names (like "OAuth" or "Eurorack"), and optionally include whole subtopics. Then choose **how closely related** articles must be:
+
+| Setting | What counts as related to "identity" (example) |
+|---|---|
+| 1 · Close | identity, plus OAuth, MFA, SSO, passwords, passkeys, IAM |
+| 2 · Related | …plus session hijacking, phishing, infostealers, API security… |
+| 3 · Broad | …plus social engineering, initial access, ransomware… |
+
+Only articles that match somewhere inside that circle appear, everywhere in the app: Home, topics, subtopics and search. Saved and Notebook always show everything you kept. A topic you haven't picked anything for stays empty and asks you to choose. Every card explains itself, for example "Picked for you: OAuth (via identity)". The **Only my interests** switch lets you peek at everything.
+
+The circle comes from the **concept map** in `site/concept-graph.js`: each concept, the words that identify it, and links to related concepts. Edit it to teach Signal new connections. Nothing is deleted when filtering: widen the circle and hidden articles come back instantly.
+
+### The For you page
+
+**Home → For you** shows the 3 best matches per topic:
+
+| Signal | Points |
+|---|---|
+| One of your words is in the title (in the summary) | +5 (+3) |
+| A concept match: your concept, 1, 2 or 3 links away | +4, +3, +2, +1 |
+| A subtopic you included | +2 |
+| Concepts that also appear in things you've saved or noted | up to +2 |
+| Freshness, fading over a few days | up to +3 |
+| Already read | −4, so new picks rotate in |
+
+It also avoids giving all three spots to one source. Switch to **Latest** for everything newest first. The scoring code is `relevance()` and `makeMatcher()` in `site/app.js`.
+
+## Your profile
+
+**You** in the sidebar (or press `5`) shows your name and avatar, a goal line, your reading streak and stats, the concepts you read most, and your interests at a glance. It's all stored in your browser and included in **Export backup**.
+
+## Create a new topic
+
+Click **+ New topic** in the sidebar and type a name. If Signal knows the subject (AI, web development, UX, science, space, photography, film, Linux & self-hosting, cooking), it suggests verified sources, subtopics and concepts. Untick what you don't want, and paste your own sources, one per line. Add `| Subtopic` to a line to choose where it goes. Then **Continue on GitHub → Create**. The same bot creates the topic, checks and files each source, and replies with what it added. After the rebuild, pick your interests for the new topic to fill it.
+
+Suggestions come from `site/topic-catalog.js`. Add your own entries there.
+
 ## Change the look
 
 Click **◐** in the toolbar, **Appearance** in the sidebar, or press `t`. Pick a palette, or choose any color for "Your color". Every palette is generated from a single hue, then adjusted until all text meets WCAG AA contrast (4.5:1), so even bright yellow stays readable. Your choice is saved in this browser and applies before the page draws, so there's no flash of the default theme.
@@ -169,11 +212,14 @@ Each of these is a real-world skill:
 feeds.json                   your sources
 scripts/fetch-feeds.mjs      fetches, cleans and merges feeds
 scripts/add-source.mjs       finds, validates and auto-sorts new sources
+scripts/add-topic.mjs        creates a new topic from the New topic form
 scripts/lib/http.mjs         SSRF-guarded, size-capped fetching
 scripts/lib/parse.mjs        RSS / Atom / CISA KEV parsing and sanitizing
 scripts/serve.mjs            local web server with security headers
 site/                        the reader (plain HTML, CSS, JS; no build step)
 site/theme.js                palette generator with contrast checks
+site/concept-graph.js        the concept map behind "only related articles"
+site/topic-catalog.js        suggested sources for new topics
 test/                        parser and security tests (npm test)
 .github/workflows/           scheduled fetch + deploy, and PR checks
 ```
