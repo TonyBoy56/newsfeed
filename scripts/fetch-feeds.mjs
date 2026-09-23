@@ -136,8 +136,9 @@ async function main() {
   const failed = results.filter((r) => !r.ok).length;
   console.log(`\nWrote ${articles.length} articles to ${OUTPUT_FILE} (${failed} feed(s) failed).`);
 
-  // Only fail the run if everything broke. One flaky feed shouldn't stop the site.
-  if (failed === results.length) process.exit(1);
+  // Only fail the run if everything broke. One flaky feed shouldn't stop the
+  // site, and having no topics yet (so no feeds at all) is fine too.
+  if (results.length > 0 && failed === results.length) process.exit(1);
 }
 
 main().catch((err) => {
