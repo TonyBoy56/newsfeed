@@ -31,7 +31,8 @@ const TYPES = {
 // the <meta> tag).
 const SECURITY_HEADERS = {
   'Content-Security-Policy':
-    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; " +
+    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
+    "connect-src 'self' https://*.supabase.co https://api.pwnedpasswords.com; " +
     "manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; " +
     "require-trusted-types-for 'script'; trusted-types 'none'",
   'X-Content-Type-Options': 'nosniff',

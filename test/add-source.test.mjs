@@ -5,7 +5,7 @@ import { parseIssueBody, findCategory, flattenCategories, rankCategories, mdSafe
 import { CONCEPT_SETS } from '../scripts/lib/parse.mjs';
 import { assertPublicUrl } from '../scripts/lib/http.mjs';
 
-const config = JSON.parse(readFileSync(new URL('../feeds.json', import.meta.url)));
+const config = JSON.parse(readFileSync(new URL('./fixtures/feeds.sample.json', import.meta.url)));
 const categories = flattenCategories(config).map((c) => ({ ...c, concepts: CONCEPT_SETS[c.section] }));
 
 test('parses the GitHub issue form body', () => {

@@ -9,9 +9,12 @@
 // * Your reading history, saves and notes live only in this browser's
 //   localStorage. Nothing is sent anywhere.
 
-import { GRAPH } from './concept-graph.js?v=9';
-import { CATALOG, suggestTopics } from './topic-catalog.js?v=9';
-import { VIBES, VIBE_GROUPS, VibeRunner } from './ambient.js?v=9';
+import { GRAPH } from './concept-graph.js?v=13';
+import { CATALOG, suggestTopics } from './topic-catalog.js?v=13';
+import { VIBES, VIBE_GROUPS, VibeRunner } from './ambient.js?v=13';
+import { SYNC_CONFIG } from './config.js?v=13';
+import { createSync } from './sync.js?v=13';
+import { mountAccount } from './account.js?v=13';
 
 const STORE_KEY = 'signal:v1';
 // theme.js loads first (see index.html) and applies your saved colors.
@@ -109,7 +112,7 @@ function toast(message) {
 // ---------- Persistent store ----------
 
 function emptyStore() {
-  return { version: 1, createdAt: Date.now(), read: {}, saved: {}, notes: {}, snapshots: {}, history: { days: {}, concepts: {} }, profile: sanitizeProfile(null), prefs: { appearance: Theme.sanitize(null), sort: 'new', collapsed: {}, frontMode: 'foryou', profileDismissed: false } };
+  return { version: 2, createdAt: Date.now(), read: {}, saved: {}, notes: {}, snapshots: {}, tomb: {}, prefsUpdated: 0, history: { days: {}, concepts: {} }, profile: sanitizeProfile(null), prefs: { appearance: Theme.sanitize(null), sort: 'new', collapsed: {}, frontMode: 'foryou', profileDismissed: false } };
 }
 
 function loadStore() {
@@ -121,13 +124,23 @@ function loadStore() {
   }
 }
 
-function persist() {
+let lastPrefs = null;
+function persist(fromSync = false) {
+  // Note when settings change, so sync knows which device's settings are newer.
+  const prefsJson = JSON.stringify(store.prefs);
+  if (lastPrefs !== null && prefsJson !== lastPrefs && !fromSync) store.prefsUpdated = Date.now();
+  lastPrefs = prefsJson;
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
   } catch {
     toast('Could not save. Is browser storage full or disabled?');
   }
+  if (!fromSync) sync?.schedulePush();
 }
+
+// Deleting something leaves a timestamped marker, so an older copy on another
+// device can't bring it back when they sync.
+const tombstone = (kind, id) => { store.tomb[`${kind}:${id}`] = Date.now(); };
 
 const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
 const num = (v) => (Number.isFinite(v) ? v : null);
@@ -173,6 +186,13 @@ function sanitizeStore(input) {
     if (clean && clean.id === id) out.snapshots[id] = clean;
   }
   out.profile = sanitizeProfile(input.profile);
+  // Version 1 came with built-in topics. Signal now starts with none, so
+  // interests picked for them are cleared once (saves and notes stay).
+  if (input.version === 1) { out.profile.sections = {}; out.profile.depth = 2; out.profile.updated = Date.now(); }
+  for (const [k, ts] of Object.entries(input.tomb ?? {}).slice(0, 20000)) {
+    if (/^[rsn]:[a-f0-9]{16}$/.test(k) && num(ts)) out.tomb[k] = ts;
+  }
+  out.prefsUpdated = num(input.prefsUpdated) ?? 0;
   out.createdAt = num(input.createdAt) ?? Math.min(Date.now(), ...Object.values(out.read), ...Object.values(out.saved));
   // Reading history for the profile page: reads per day and per concept.
   for (const [day, n] of Object.entries(input.history?.days ?? {}).slice(-800)) {
@@ -232,6 +252,34 @@ function maybeDropSnapshot(id) {
 // ---------- App state ----------
 
 let store = loadStore();
+
+// ---------- Accounts & sync (see sync.js) ----------
+let sync = null;
+let account = null;
+function setupSync() {
+  sync = createSync({
+    config: SYNC_CONFIG,
+    getStore: () => store,
+    applyRemote: (merged) => {
+      store = sanitizeStore(merged);
+      profileVersion++;
+      store.prefs.appearance = Theme.apply(store.prefs.appearance);
+      persist(true);
+      if (!ui.editing) refresh();
+    },
+  });
+  account = mountAccount({
+    sync, h, put, $, toast, openDialog, closeDialog,
+    onChange: () => {
+      if (!account) return; // subscribe() fires once before mountAccount returns
+      const slot = $('#sync-slot');
+      if (slot) put(slot, account.chip());
+      if (ui.view === 'profile' && !$('#dialog').open && !document.activeElement?.closest('#list')) renderList();
+    },
+  });
+  put($('#sync-slot'), account.chip());
+  document.addEventListener('signal-open-profile', () => setFilter({ view: 'profile' }));
+}
 let data = { repo: null, sections: [], categories: [], sources: [], articles: [], generatedAt: null };
 let catById = new Map();
 let byId = new Map();
@@ -252,7 +300,7 @@ function allArticles() {
   return [...map.values()];
 }
 
-const sectionOf = (a) => a.section || catById.get(a.category)?.section || 'security';
+const sectionOf = (a) => a.section || catById.get(a.category)?.section || '';
 const sectionById = (id) => data.sections.find((s) => s.id === id);
 
 function matchesQuery(a, q) {
@@ -557,6 +605,10 @@ function renderStats() {
 // ---------- Rendering: list ----------
 
 function renderContext() {
+  if (!data.sections.length && !['saved', 'notebook', 'profile'].includes(ui.view)) {
+    put($('#context'), h('h1', {}, 'Get started'));
+    return;
+  }
   const view = VIEWS.find((v) => v.id === ui.view);
   const cat = catById.get(ui.category);
   const sec = sectionById(ui.section);
@@ -581,7 +633,7 @@ function renderContext() {
 
   if (ui.view === 'profile') {
     put($('#context'), h('h1', {}, 'You'),
-      h('p', {}, 'Your profile, interests and learning stats. All of it stays in this browser.'));
+      h('p', {}, 'Your profile, interests and learning stats. They stay in this browser unless you turn on sync below.'));
     return;
   }
 
@@ -635,7 +687,7 @@ function renderFront(list) {
           h('button', { type: 'button', class: 'btn primary', onclick: () => showInterests() }, 'Set up my interests'),
           h('button', { type: 'button', class: 'btn', onclick: () => { store.prefs.profileDismissed = true; persist(); refresh(); } }, 'Not now')))
     : null;
-  put(list, welcome, ...frontGroups.map((g) => h('section', { class: 'front-group', 'aria-label': g.section.name },
+  put(list, pendingBanner(), welcome, ...frontGroups.map((g) => h('section', { class: 'front-group', 'aria-label': g.section.name },
     h('div', { class: 'front-head' },
       h('h2', {}, g.section.name),
       g.total ? h('button', { type: 'button', class: 'link-btn', onclick: () => setFilter({ section: g.section.id, category: null, concept: null }) },
@@ -653,6 +705,7 @@ function renderList() {
   list.classList.toggle('front', isFront());
   list.classList.toggle('profile', ui.view === 'profile');
   if (ui.view === 'profile') { renderProfile(list); return; }
+  if (!data.sections.length && !['saved', 'notebook'].includes(ui.view)) { renderStart(list); return; }
   if (isFront()) { renderFront(list); return; }
   if (!visible.length) {
     // Browsing a topic you haven't picked interests for: ask, don't just show nothing.
@@ -752,6 +805,7 @@ function renderEditor(a) {
       toast('Note saved');
     } else {
       delete store.notes[a.id];
+      tombstone('n', a.id);
       maybeDropSnapshot(a.id);
     }
     ui.editing = null;
@@ -804,7 +858,7 @@ function markRead(a, value) {
     for (const c of a.concepts || []) store.history.concepts[c] = (store.history.concepts[c] || 0) + 1;
   }
   if (value) store.read[a.id] = Date.now();
-  else delete store.read[a.id];
+  else { delete store.read[a.id]; tombstone('r', a.id); }
   persist();
   // Defer so a click on the title link still navigates before we re-render.
   setTimeout(refresh, 0);
@@ -813,6 +867,7 @@ function markRead(a, value) {
 function toggleSaved(a) {
   if (store.saved[a.id]) {
     delete store.saved[a.id];
+    tombstone('s', a.id);
     maybeDropSnapshot(a.id);
     toast('Removed from saved');
   } else {
@@ -854,8 +909,9 @@ function refresh() {
 function openDialog(title, ...body) {
   $('#dialog-title').textContent = title;
   put($('#dialog-body'), ...body);
-  $('#dialog').showModal();
+  if (!$('#dialog').open) $('#dialog').showModal();
 }
+const closeDialog = () => { if ($('#dialog').open) $('#dialog').close(); };
 
 function showSources() {
   // Start from whatever you're looking at in the main view.
@@ -864,7 +920,7 @@ function showSources() {
     status: 'all',
     query: '',
   };
-  const sectionOfSource = (src) => src.section || catById.get(src.category)?.section || 'security';
+  const sectionOfSource = (src) => src.section || catById.get(src.category)?.section || '';
   const matchesTopic = (src) => {
     if (filter.topic.startsWith('sec:')) return sectionOfSource(src) === filter.topic.slice(4);
     if (filter.topic.startsWith('cat:')) return src.category === filter.topic.slice(4);
@@ -1065,7 +1121,7 @@ function showAppearance() {
       row('Layout', 'Compact fits more articles on screen', seg('density', [['comfy', 'Comfortable'], ['compact', 'Compact']])),
       row('Corners', null, seg('corners', [['square', 'Square'], ['soft', 'Soft'], ['round', 'Round']])),
       h('h3', {}, 'Background vibe'),
-      h('p', {}, 'An animation in the empty space around your articles, in your theme colors. Desktop only, and it pauses when the tab is hidden.'),
+      h('p', {}, 'An animation in your theme colors: in the empty space beside your articles on desktop, and behind the page on phones. It pauses when the tab is hidden.'),
       h('div', { class: 'chips vibe-groups', role: 'tablist', 'aria-label': 'Vibe groups' },
         ...['All', ...VIBE_GROUPS].map((g) => h('button', {
           type: 'button', class: 'chip', role: 'tab', 'aria-pressed': String(vibeGroup === g),
@@ -1085,7 +1141,8 @@ function showAppearance() {
         })),
       row('Intensity', 'Subtle keeps it in the background', seg('vibeIntensity', [['subtle', 'Subtle'], ['medium', 'Medium'], ['vivid', 'Vivid']])),
       row('Speed', null, seg('vibeSpeed', [['slow', 'Slow'], ['normal', 'Normal'], ['fast', 'Fast']])),
-      row('Where', 'Right side keeps it away from what you read', seg('vibePlace', [['side', 'Right side'], ['full', 'Everywhere']])),
+      row('Where', 'On desktop. Right side keeps it away from what you read', seg('vibePlace', [['side', 'Right side'], ['full', 'Everywhere']])),
+      row('On phones', 'Fills the background behind your articles. Uses a little more battery', seg('vibeMobile', [['on', 'On'], ['off', 'Off']])),
       row('Page width', 'Leave room on the right for the vibe on wide screens', seg('layoutWidth', [['full', 'Full width'], ['roomy', 'Leave room']])),
       h('div', { class: 'btn-row' },
         h('button', { type: 'button', class: 'btn', onclick: () => { setAppearance(Theme.DEFAULTS); renderRef(); toast('Back to the default look'); } }, 'Reset to default')),
@@ -1240,7 +1297,7 @@ function renderProfile(list) {
   const goal = h('input', { type: 'text', placeholder: 'What are you working toward? e.g. "Get sharp on cloud identity attacks"', 'aria-label': 'Your goal', maxlength: '160', autocomplete: 'off' });
   goal.value = prof.goal;
   const saveBasics = () => {
-    store.profile = sanitizeProfile({ ...store.profile, name: name.value, goal: goal.value });
+    store.profile = sanitizeProfile({ ...store.profile, name: name.value, goal: goal.value, updated: Date.now() });
     persist();
     const av = document.querySelector('.profile-card .avatar');
     if (av) av.textContent = initials(store.profile.name);
@@ -1284,9 +1341,12 @@ function renderProfile(list) {
             : h('span', { class: 'hint' }, 'Nothing picked yet, so this topic is empty. ',
                 h('button', { type: 'button', class: 'link-btn add-link', onclick: () => showInterests(sec.id) }, 'Pick interests')));
       })),
+    account.renderPanel(),
     h('section', { class: 'profile-panel' },
       h('h2', {}, 'Your data'),
-      h('p', { class: 'hint' }, 'Your profile, interests, saves and notes live only in this browser. Back them up or move them to another device.'),
+      h('p', { class: 'hint' }, sync.state.status === 'synced'
+        ? 'Stored in this browser and synced, end-to-end encrypted, to your account. You can also keep a backup file.'
+        : 'Your profile, interests, saves and notes live in this browser. Sign in to sync them, or back them up to a file.'),
       h('div', { class: 'btn-row' },
         h('button', { type: 'button', class: 'btn', onclick: exportData }, 'Export backup'),
         h('button', { type: 'button', class: 'btn', onclick: () => $('#import-file').click() }, 'Import backup'))),
@@ -1296,7 +1356,7 @@ function renderProfile(list) {
 
 // ---------- New topic ----------
 
-function showNewTopic() {
+function showNewTopic(presetName = '') {
   if (!data.repo) {
     openDialog('New topic', h('p', {}, 'This copy of Signal isn\'t linked to a GitHub repository yet. Add "repo": "your-name/newsfeed" under settings in feeds.json.'));
     return;
@@ -1318,13 +1378,15 @@ function showNewTopic() {
       if (!desc.value) desc.value = e.description;
       subs.value = e.subtopics.join(', ');
       concepts.value = Object.entries(e.concepts).map(([label, terms]) => `${label}: ${terms.join(', ')}`).join('\n');
+      concepts.placeholder = e.builtin ? 'Leave empty: this starting point has its own concept map' : concepts.placeholder;
     }
     renderSuggestions();
   };
 
   const renderSuggestions = () => {
     const matches = suggestTopics(name.value);
-    const others = (matches.length ? matches : CATALOG).filter((e) => e !== entry);
+    const have = new Set(data.sections.map((sec) => sec.name.toLowerCase()));
+    const others = (matches.length ? matches : CATALOG).filter((e) => e !== entry && !have.has(e.name.toLowerCase()));
     put(suggestBox,
       entry ? h('div', {},
         h('div', { class: 'interest-label' }, `Suggested sources from "${entry.name}"`),
@@ -1359,7 +1421,7 @@ function showNewTopic() {
     const lines = [
       ...(entry ? entry.sources.filter((src) => picked.has(src.url)).map((src) => `${src.url} | ${src.subtopic}`) : []),
       ...own.value.split('\n').map((l) => l.trim()).filter(Boolean),
-    ].slice(0, 15);
+    ].slice(0, 25);
     for (const line of lines) {
       const raw = line.split('|')[0].trim();
       if (!safeHref(/^[a-z]+:/i.test(raw) ? raw : `https://${raw}`)) { toast(`That doesn't look like a web address: ${raw.slice(0, 40)}`); return; }
@@ -1367,14 +1429,16 @@ function showNewTopic() {
     const params = new URLSearchParams({
       template: 'new-topic.yml', title: `[New topic] ${topic}`,
       name: topic, description: desc.value.trim(), subtopics: subs.value.trim(),
-      sources: lines.join('\n'), concepts: concepts.value.trim(),
+      sources: lines.join('\n'), concepts: concepts.value.trim(), start: entry?.name || '',
     });
     window.open(`https://github.com/${data.repo}/issues/new?${params}`, '_blank', 'noopener,noreferrer');
     $('#dialog').close();
-    toast('Finish on GitHub: click "Create", and the bot builds your topic');
+    addPending(topic);
+    toast('Finish on GitHub: click "Create". Signal will pick up the new topic by itself');
   };
 
-  renderSuggestions();
+  const preset = presetName && CATALOG.find((e) => e.name === presetName);
+  if (preset) { name.value = preset.name; choose(preset); } else renderSuggestions();
   openDialog('New topic',
     h('form', { class: 'form', onsubmit: submit },
       h('div', { class: 'field' }, h('label', { for: name.id }, 'Topic name'), name),
@@ -1389,7 +1453,7 @@ function showNewTopic() {
       h('div', { class: 'note-box' }, 'What happens next:', h('ol', {},
         h('li', {}, 'GitHub opens with everything filled in. Click "Create".'),
         h('li', {}, 'A bot creates the topic, checks each source and files it, then replies with what it added.'),
-        h('li', {}, 'After a couple of minutes, pick your interests for the new topic and it fills up.'))),
+        h('li', {}, 'The site rebuilds right away. Keep Signal open: in about 2 minutes the topic appears here and Your interests opens for it.'))),
       h('div', { class: 'actions' },
         h('button', { type: 'button', class: 'btn', onclick: () => $('#dialog').close() }, 'Cancel'),
         h('button', { type: 'submit', class: 'btn primary' }, 'Continue on GitHub'))));
@@ -1397,6 +1461,96 @@ function showNewTopic() {
 }
 
 const slugify = (t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60);
+
+// ---------- Topics on the way ----------
+// After you send a new topic to GitHub, the bot adds it and rebuilds the site
+// right away. Signal checks for it every 20 seconds (only while this tab is
+// visible) and opens Your interests for it the moment it lands. This list is
+// per device and isn't synced.
+
+const PENDING_KEY = 'signal:pending';
+const PENDING_EVERY = 20_000;
+const PENDING_GIVE_UP = 30 * 60_000;
+let pending = (() => {
+  try {
+    const v = JSON.parse(localStorage.getItem(PENDING_KEY));
+    return Array.isArray(v) ? v.filter((p) => p && typeof p.name === 'string' && num(p.at)).map((p) => ({ name: p.name.slice(0, 40), at: p.at })).slice(0, 10) : [];
+  } catch { return []; }
+})();
+let pendingTimer = null;
+const savePending = () => { try { localStorage.setItem(PENDING_KEY, JSON.stringify(pending)); } catch { /* private mode */ } };
+const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+function addPending(name) {
+  pending = [...pending.filter((p) => !sameName(p.name, name)), { name, at: Date.now() }];
+  savePending();
+  watchPending();
+  refresh();
+}
+
+function cancelPending(name) {
+  pending = pending.filter((p) => !sameName(p.name, name));
+  savePending();
+  refresh();
+}
+
+function watchPending(delay = PENDING_EVERY) {
+  clearTimeout(pendingTimer);
+  if (pending.length) pendingTimer = setTimeout(checkPending, delay);
+}
+
+async function checkPending() {
+  if (!pending.length) return;
+  if (document.hidden) { watchPending(); return; } // resumes on visibilitychange
+  const before = data.generatedAt;
+  const ok = await loadData({ fresh: true, quiet: true });
+  const arrived = pending.map((p) => ({ p, sec: data.sections.find((s) => sameName(s.name, p.name)) })).filter((x) => x.sec);
+  const gaveUp = pending.filter((p) => Date.now() - p.at > PENDING_GIVE_UP && !arrived.some((x) => x.p === p));
+  pending = pending.filter((p) => !arrived.some((x) => x.p === p) && !gaveUp.includes(p));
+  savePending();
+  if (ok && data.generatedAt !== before) refresh();
+  if (arrived.length) {
+    const { sec } = arrived[arrived.length - 1];
+    toast(`${sec.name} is ready. Pick what you want to learn from it.`);
+    if (!$('#dialog').open) showInterests(sec.id);
+  }
+  for (const p of gaveUp) toast(`${p.name} hasn't shown up. If you didn't click "Create" on GitHub, try again; otherwise check the issue for the bot's reply.`);
+  if (gaveUp.length && !arrived.length) refresh();
+  watchPending();
+}
+
+function pendingBanner() {
+  if (!pending.length) return null;
+  return h('div', { class: 'pending-card', role: 'status' },
+    h('span', { class: 'spinner', 'aria-hidden': 'true' }),
+    h('div', {},
+      h('strong', {}, `Building ${pending.map((p) => p.name).join(', ')}…`),
+      h('p', {}, 'Usually ready about 2 minutes after you click "Create" on GitHub. Keep this tab open and it appears by itself.')),
+    h('div', { class: 'btn-row' }, ...pending.map((p) => h('button', {
+      type: 'button', class: 'btn small', onclick: () => cancelPending(p.name), 'aria-label': `Stop waiting for ${p.name}`,
+    }, pending.length > 1 ? `Stop waiting for ${p.name}` : 'Stop waiting'))));
+}
+
+// ---------- First run: no topics yet ----------
+
+function renderStart(list) {
+  const card = (e) => h('div', { class: 'start-card' },
+    h('h3', {}, e.name),
+    h('p', {}, e.description),
+    h('div', { class: 'hint' }, `${e.sources.length} sources · ${e.subtopics.join(', ')}`),
+    h('button', { type: 'button', class: 'btn', onclick: () => showNewTopic(e.name) }, `Start with ${e.name}`));
+  put(list,
+    h('div', { class: 'start' },
+      h('div', { class: 'start-head' },
+        h('h2', {}, 'Welcome to Signal'),
+        h('p', {}, 'Signal starts empty. Pick a topic to follow, and Signal gathers articles from its sources, then shows only what relates to the interests you choose.'),
+        h('div', { class: 'btn-row' },
+          h('button', { type: 'button', class: 'btn primary', onclick: () => showNewTopic() }, '+ Create your own topic'))),
+      pendingBanner(),
+      h('div', { class: 'interest-label' }, 'Or start from a ready-made topic'),
+      h('div', { class: 'start-grid' }, ...CATALOG.map(card))));
+  put($('#more'));
+}
 
 // ---------- Add source ----------
 
@@ -1495,22 +1649,21 @@ function onKey(e) {
 
 // ---------- Boot ----------
 
-async function loadData() {
+async function loadData({ fresh = false, quiet = false } = {}) {
   try {
-    const res = await fetch('data/articles.json', { cache: 'no-cache' });
+    const res = await fetch(fresh ? `data/articles.json?t=${Date.now()}` : 'data/articles.json', { cache: fresh ? 'no-store' : 'no-cache' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     data = {
       generatedAt: str(json.generatedAt, 40) || null,
       repo: /^[\w.-]+\/[\w.-]+$/.test(json.repo || '') ? json.repo : null,
-      // Older data files have no sections: treat everything as Security.
-      sections: (json.sections || [{ id: 'security', name: 'Security', description: '' }])
+      sections: (json.sections || [])
         .map((s) => ({
           id: str(s.id, 40), name: str(s.name, 80), description: str(s.description, 300),
           concepts: Array.isArray(s.concepts) ? s.concepts.filter((c) => typeof c === 'string').slice(0, 40).map((c) => c.slice(0, 40)) : [],
         })),
       categories: (json.categories || []).map((c) => ({
-        id: str(c.id, 60), name: str(c.name, 80), description: str(c.description, 300), section: str(c.section, 40) || 'security',
+        id: str(c.id, 60), name: str(c.name, 80), description: str(c.description, 300), section: str(c.section, 40),
       })),
       sources: (json.sources || []).map((s) => ({ name: str(s.name, 120), site: s.site, category: str(s.category, 60), ok: Boolean(s.ok), count: num(s.count) ?? 0, error: str(s.error, 200) })),
       articles: (json.articles || []).map(sanitizeArticle).filter(Boolean),
@@ -1522,6 +1675,7 @@ async function loadData() {
     $('#updated').textContent = data.generatedAt ? `Updated ${timeAgo(data.generatedAt)}` : 'Updated';
     $('#updated').title = data.generatedAt ? new Date(data.generatedAt).toLocaleString() : '';
   } catch {
+    if (quiet) return false;
     $('#updated').textContent = 'No feed data yet';
     put($('#list'), h('div', { class: 'empty' },
       h('strong', {}, 'No articles yet'),
@@ -1559,12 +1713,17 @@ function init() {
   $('#import-file').addEventListener('change', (e) => { importData(e.target.files[0]); e.target.value = ''; });
   document.addEventListener('keydown', onKey);
 
+  setupSync();
   loadData().then((ok) => {
     if (!ok) return;
     pruneStore();
-    persist();
+    persist(true);
     refresh();
-  });
+  }).finally(() => sync.init());
+
+  // New topics you've sent to GitHub: keep an eye out for them.
+  watchPending(3000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && pending.length) watchPending(500); });
 
   // Keep "3h ago" labels honest if the tab stays open.
   setInterval(() => { if (!ui.editing && data.generatedAt) $('#updated').textContent = `Updated ${timeAgo(data.generatedAt)}`; }, 60_000);

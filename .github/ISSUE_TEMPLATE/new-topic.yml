@@ -37,3 +37,9 @@ body:
       placeholder: |
         agents: agent, agentic
         evaluation: eval, benchmark
+  - type: input
+    id: start
+    attributes:
+      label: Starting point (optional)
+      description: The name of a ready-made topic in Signal's catalog. Its sources and subtopics are used as-is.
+      placeholder: e.g. Security

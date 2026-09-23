@@ -233,6 +233,7 @@ async function main() {
   const config = JSON.parse(await readFile(FEEDS_FILE, 'utf8'));
   registerCustomConcepts(config);
   const categories = flattenCategories(config).map((c) => ({ ...c, concepts: CONCEPT_SETS[c.section] }));
+  if (!categories.length) throw new Error('There are no topics yet. Create one with "+ New topic" first, then add sources to it.');
 
   const chosen = findCategory(categories, input.category);
   const { feedUrl, xml, meta } = await discoverFeed(input.url);

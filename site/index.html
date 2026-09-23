@@ -7,16 +7,21 @@
     Content Security Policy: the browser refuses to run any script, style or
     connection that isn't listed here. Inline scripts are blocked, and
     Trusted Types stops unsafe HTML sinks like innerHTML from being used at all.
+    connect-src allows exactly two outside services: your Supabase project
+    (accounts and encrypted sync) and the Have I Been Pwned range API
+    (checking new passwords against known breaches, anonymously).
   -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://*.supabase.co https://api.pwnedpasswords.com; manifest-src 'self'; base-uri 'none'; form-action 'none'; require-trusted-types-for 'script'; trusted-types 'none'">
   <meta name="referrer" content="no-referrer">
   <meta name="color-scheme" content="light dark">
   <title>Signal · Newsfeed</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=9">
+  <link rel="stylesheet" href="styles.css?v=13">
   <!-- Applies your saved colors before first paint, so there's no flash. -->
-  <script src="theme.js?v=9"></script>
-  <script type="module" src="app.js?v=9"></script>
+  <script src="theme.js?v=13"></script>
+  <!-- Supabase client, vendored (not loaded from a CDN) so the CSP can stay script-src 'self'. -->
+  <script defer src="vendor/supabase-2.117.0.js"></script>
+  <script type="module" src="app.js?v=13"></script>
 </head>
 <body>
   <canvas id="ambient" aria-hidden="true" hidden></canvas>
@@ -53,6 +58,7 @@
       </section>
 
       <div class="sidebar-foot">
+        <span id="sync-slot"></span>
         <button class="link-btn" id="open-interests" type="button">Your interests</button>
         <button class="link-btn" id="open-sources" type="button">Sources</button>
         <button class="link-btn" id="open-data" type="button">Your data</button>

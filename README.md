@@ -1,13 +1,10 @@
 # Signal: a personal newsfeed
 
-Signal pulls 50 hand-picked sources into one fast, private reader, across three interests: **Security**, **Music** and **Games**. You can save articles, tag them and write notes as you learn. It also doubles as a hands-on security project: every design choice here is a real defensive technique, explained in the code and in [Security design](#security-design) below.
+Signal is a fast, private reader for the topics *you* choose. It starts empty: pick a ready-made topic or build your own, choose what you want to learn from it, and Signal gathers articles from that topic's sources and shows only what's related. You can save articles, tag them and write notes as you learn. It also doubles as a hands-on security project: every design choice here is a real defensive technique, explained in the code and in [Security design](#security-design) below.
 
-- **Organized by topic:**
-  - **Security:** News & Breaches, Threat Research, Vulnerabilities & Advisories, AppSec, Cloud Security, Perspectives
-  - **Music:** Production & Gear, Theory & Learning
-  - **Games:** Indie & Design, Game Security & Hacking
-- **Concept tags:** each article is auto-tagged with its section's vocabulary (phishing and ransomware for security, synthesis and mixing for music, anti-cheat and reverse engineering for games), so you can study by idea, not just by source.
-- **CVE links:** every CVE ID mentioned links straight to the National Vulnerability Database. CISA's Known Exploited Vulnerabilities catalog is built in.
+- **No built-in topics:** everyone starts with a welcome screen. Ready-made starting points (Security, Music, Games, AI, web development, UX, science, space, photography, film, Linux & self-hosting, cooking) come with vetted sources and subtopics, or you can create your own. A new topic is live about 2 minutes after you submit it, and Signal opens Your interests for it as soon as it lands.
+- **Concept tags:** each article is auto-tagged with its topic's vocabulary (phishing and ransomware for security, synthesis and mixing for music, anti-cheat for games, or the concepts you give a custom topic), so you can study by idea, not just by source.
+- **CVE links:** every CVE ID mentioned links straight to the National Vulnerability Database. The Security starting point includes CISA's Known Exploited Vulnerabilities catalog.
 - **Notebook:** write notes with learning prompts ("Key takeaway", "How I would detect this"), add your own tags, and review everything in one place.
 - **Private by design:** your saves and notes never leave your browser. Export and import lets you back them up or move them.
 - **Only what you care about:** pick what you want to learn per topic, and only articles related to those interests (1–3 steps out on a concept map) appear. **Home → For you** shows the best 3 per topic, each with a reason.
@@ -60,7 +57,7 @@ There's no server or database to run, and it costs nothing.
 
    **https://tonyboy56.github.io/newsfeed/**
 
-From then on it refreshes itself every 3 hours.
+The site opens on a welcome screen, since there are no topics yet. Pick one and it goes live in about 2 minutes. From then on it refreshes itself every 3 hours.
 
 > GitHub pauses scheduled workflows in repos with no activity for 60 days. If updates ever stop, open the Actions tab and re-enable the workflow, or push any commit.
 
@@ -138,9 +135,15 @@ It also avoids giving all three spots to one source. Switch to **Latest** for ev
 
 ## Create a new topic
 
-Click **+ New topic** in the sidebar and type a name. If Signal knows the subject (AI, web development, UX, science, space, photography, film, Linux & self-hosting, cooking), it suggests verified sources, subtopics and concepts. Untick what you don't want, and paste your own sources, one per line. Add `| Subtopic` to a line to choose where it goes. Then **Continue on GitHub → Create**. The same bot creates the topic, checks and files each source, and replies with what it added. After the rebuild, pick your interests for the new topic to fill it.
+Click **+ New topic** in the sidebar (or a **Start with…** card on the welcome screen) and type a name. If Signal knows the subject (Security, Music, Games, AI, web development, UX, science, space, photography, film, Linux & self-hosting, cooking), it suggests verified sources, subtopics and concepts. Starting points live in `site/topic-catalog.js`; Security, Music and Games also bring their own concept maps. Untick what you don't want, and paste your own sources, one per line. Add `| Subtopic` to a line to choose where it goes. Then **Continue on GitHub → Create**. The same bot creates the topic, checks and files each source, and replies with what it added. The bot starts a rebuild right away (no waiting for the 3-hour schedule). Keep Signal open: it checks every 20 seconds, and when the topic appears it opens **Your interests** for it.
 
 Suggestions come from `site/topic-catalog.js`. Add your own entries there.
+
+## Accounts & sync
+
+Sign in on any device and your interests, notes, saves, reading history, appearance and vibes follow you. Your data is **end-to-end encrypted**: your browser locks it with a key derived from your password before uploading, so the storage service only ever sees scrambled data. Sign-in supports **two-factor codes** from an authenticator app, and a **recovery key** backs you up if you forget your password.
+
+It runs on a free [Supabase](https://supabase.com) project. Follow **[docs/ACCOUNTS.md](docs/ACCOUNTS.md)** to set it up (about 10 minutes). Until you do, everything still works locally.
 
 ## Change the look
 
@@ -173,7 +176,7 @@ To add your own vibe, write an `init` and `draw` function in `site/ambient-more.
 
 ## Customize your sources by hand
 
-Edit `feeds.json`. It's organized as **sections** (Security, Music, Games), each with **categories**, and each category has a list of feeds:
+Edit `feeds.json`. It starts with no sections. Each topic you add becomes a **section**, each with **categories**, and each category has a list of feeds (`test/fixtures/feeds.sample.json` has a full example):
 
 ```json
 { "name": "Krebs on Security", "url": "https://krebsonsecurity.com/feed/", "site": "https://krebsonsecurity.com" }
@@ -188,7 +191,7 @@ Where to find feeds:
 
 If a feed breaks, the app's **Sources** panel shows which one failed and why.
 
-A category can set its own `"maxAgeDays"` to keep articles longer than the default. The Theory & Learning and Game Security categories use this, because their posts stay useful for months.
+A category can set its own `"maxAgeDays"` to keep articles longer than the default. The Music and Games starting points use this for their learning-focused subtopics, because those posts stay useful for months.
 
 Settings at the top of `feeds.json`:
 
@@ -218,6 +221,14 @@ This project is small, but it faces the same threats as bigger apps: untrusted i
 | SSRF: making the bot fetch internal addresses (such as cloud metadata at `169.254.169.254`) | Hosts that resolve to private or loopback addresses are refused, and every redirect hop is re-checked | `scripts/lib/http.mjs` |
 | A feed's title injecting links or @mentions into the bot's reply | Remote text is stripped to plain text and Markdown-escaped before it's posted | `mdSafe()` in `add-source.mjs` |
 | Themes as an injection path | Colors are applied through the CSS Object Model, which CSP allows, rather than inline styles, which CSP blocks. Saved settings are validated against an allow-list | `site/theme.js` |
+| Someone reading your synced data (including the storage provider) | End-to-end AES-256-GCM encryption in the browser. The server gets a PBKDF2-derived auth key, never your password, so it can't derive the data key | `site/crypto.js`, `docs/ACCOUNTS.md` |
+| Stolen password | TOTP two-factor, enforced by a restrictive row-level-security policy (`aal2`), not just by the UI | `supabase/setup.sql` |
+| One account reading or overwriting another's data | Row-level security scoped to `auth.uid()`, plus ciphertext bound to the user id with AES-GCM additional data | `setup.sql`, `crypto.js` |
+| Strangers signing up on a public site | Sign-ups turned off after you register, and a minimum password length of 32 blocks weak passwords sent straight to the API | `docs/ACCOUNTS.md` |
+| XSS stealing your encryption key | The device copy of the key is a non-extractable CryptoKey in IndexedDB, on top of CSP and Trusted Types | `site/sync.js` |
+| Weak or breached passwords | A strength meter, plus a Have I Been Pwned check via k-anonymity (only 5 hash characters leave the device) | `crypto.js` |
+| Two devices overwriting each other | Version-checked writes (optimistic concurrency) and a merge with tombstones for deletions | `sync.js`, `sync-merge.js` |
+| Supply-chain risk from the auth library | supabase-js is vendored at a pinned version and served from this site, so there's no CDN at runtime | `site/vendor/` |
 | Path traversal on the local server | Resolved paths must stay inside `site/`. It binds to `127.0.0.1` only | `scripts/serve.mjs` |
 
 ### Practice exercises
@@ -247,6 +258,13 @@ site/concept-graph.js        the concept map behind "only related articles"
 site/topic-catalog.js        suggested sources for new topics
 site/ambient.js              background vibe engine + first 8 vibes
 site/ambient-more.js         19 more vibes
+site/crypto.js               end-to-end encryption (Web Crypto)
+site/sync.js                 accounts, 2FA and encrypted sync (Supabase)
+site/sync-merge.js           merging data between devices
+site/account.js              sign-in, 2FA and recovery screens
+site/config.js               your Supabase URL and publishable key
+supabase/setup.sql           database table and row-level security
+docs/ACCOUNTS.md             accounts setup guide
 test/                        parser and security tests (npm test)
 .github/workflows/           scheduled fetch + deploy, and PR checks
 ```

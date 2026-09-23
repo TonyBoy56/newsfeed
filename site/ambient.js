@@ -7,7 +7,7 @@
 // * it caps the frame rate and pixel density,
 // * it draws a single still frame if your system asks for reduced motion.
 
-import { MORE_SCENES, MORE_VIBES, VIBE_GROUPS as GROUPS } from './ambient-more.js?v=9';
+import { MORE_SCENES, MORE_VIBES, VIBE_GROUPS as GROUPS } from './ambient-more.js?v=13';
 
 export const VIBE_GROUPS = ['Modes', ...GROUPS];
 export const VIBES = [
@@ -260,7 +260,7 @@ const SCENES = {
   },
 
   starfield: {
-    init: (w, h) => ({ stars: Array.from({ length: density(w, h, 6000, 60, 260) }, () => ({ x: rand(-1, 1), y: rand(-1, 1), z: rand(0.05, 1) })) }),
+    init: (w, h) => ({ stars: Array.from({ length: density(w, h, 4000, 150, 280) }, () => ({ x: rand(-1, 1), y: rand(-1, 1), z: rand(0.05, 1) })) }),
     draw(ctx, s, w, h, t, dt, c, k) {
       ctx.clearRect(0, 0, w, h);
       const cx = w / 2, cy = h / 2, scale = Math.max(w, h) * 0.5;
@@ -271,9 +271,9 @@ const SCENES = {
         const x = cx + (st.x / st.z) * scale, y = cy + (st.y / st.z) * scale;
         const px = cx + (st.x / pz) * scale, py = cy + (st.y / pz) * scale;
         if (x < 0 || x > w || y < 0 || y > h) continue;
-        const bright = (1 - st.z) * k;
+        const bright = Math.min(1, 0.15 + (1 - st.z) * 1.1) * k;
         ctx.strokeStyle = rgba(st.z < 0.3 ? c.accent : (c.dark ? [255, 255, 255] : c.text), bright * 0.9);
-        ctx.lineWidth = (1 - st.z) * 2.4;
+        ctx.lineWidth = 0.6 + (1 - st.z) * 2.2;
         ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(x, y); ctx.stroke();
       }
     },
@@ -342,6 +342,8 @@ Object.assign(SCENES, MORE_SCENES);
 const pointer = { x: 0, y: 0, inside: false };
 window.addEventListener('pointermove', (e) => { pointer.x = e.clientX; pointer.y = e.clientY; pointer.inside = true; }, { passive: true });
 window.addEventListener('pointerleave', () => { pointer.inside = false; });
+// A finger lifting off the screen is the touch version of the pointer leaving.
+for (const ev of ['pointerup', 'pointercancel']) window.addEventListener(ev, (e) => { if (e.pointerType !== 'mouse') pointer.inside = false; }, { passive: true });
 
 const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
 
@@ -362,9 +364,12 @@ export class VibeRunner {
   }
 
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-    const w = this.fullscreen ? window.innerWidth : this.canvas.clientWidth;
-    const h = this.fullscreen ? window.innerHeight : this.canvas.clientHeight;
+    // Phones get fewer pixels to fill: easier on the battery, and it's a soft background anyway.
+    const dpr = Math.min(window.devicePixelRatio || 1, this.fullscreen && !DESKTOP?.matches ? 1 : 1.5);
+    // The page canvas is sized by CSS (100lvh), so a phone's address bar sliding
+    // in and out doesn't leave a gap or change its size.
+    const w = this.fullscreen ? this.canvas.clientWidth || window.innerWidth : this.canvas.clientWidth;
+    const h = this.fullscreen ? this.canvas.clientHeight || window.innerHeight : this.canvas.clientHeight;
     if (!w || !h) return false;
     this.w = w; this.h = h;
     this.canvas.width = Math.round(w * dpr);
@@ -421,14 +426,18 @@ export class VibeRunner {
 
   frame(dt) {
     const speed = SPEED[this.settings.vibeSpeed] ?? 1;
-    const k = INTENSITY[this.settings.vibeIntensity] ?? 0.75;
+    // On phones the cards cover most of the screen and only the gaps show the
+    // vibe, so it gets a little more strength there.
+    const boost = this.fullscreen && !DESKTOP?.matches ? 1.4 : 1;
+    const k = Math.min(1.25, (INTENSITY[this.settings.vibeIntensity] ?? 0.75) * boost);
     this.t += dt * speed;
     this.scene.draw(this.ctx, this.state, this.w, this.h, this.t, dt * speed, this.colors, k);
   }
 
   loop(now) {
     this.raf = requestAnimationFrame(this.loop);
-    const minGap = 1000 / (this.scene.fps || 45);
+    const fps = this.scene.fps || 45;
+    const minGap = 1000 / (this.fullscreen && !DESKTOP?.matches ? Math.min(fps, 30) : fps);
     if (now - this.last < minGap) return;
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
@@ -478,7 +487,7 @@ function syncBackground(settings) {
   const canvas = document.getElementById('ambient');
   if (!canvas) return;
   bg ||= new VibeRunner(canvas, { fullscreen: true });
-  const on = settings.vibe !== 'off' && DESKTOP?.matches && !document.hidden;
+  const on = settings.vibe !== 'off' && !document.hidden && (DESKTOP?.matches || settings.vibeMobile !== 'off');
   canvas.hidden = !on;
   if (on) bg.set(resolveScene(settings.vibe), settings); else { bg.stop(); bg.clear(); bg.scene = null; }
 }
@@ -496,10 +505,18 @@ const currentSettings = () => window.SignalTheme?.current || { vibe: 'off' };
 document.addEventListener('signal-theme', (e) => syncBackground(e.detail));
 document.addEventListener('visibilitychange', () => syncBackground(currentSettings()));
 DESKTOP?.addEventListener?.('change', () => syncBackground(currentSettings()));
+// Restart the scene only for a real size change (rotating the phone, resizing
+// the window), not for the address bar showing and hiding while you scroll.
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { if (bg?.scene) { bg.state = null; syncBackground(currentSettings()); } }, 200);
+  resizeTimer = setTimeout(() => {
+    const canvas = document.getElementById('ambient');
+    if (!bg?.scene || !canvas) return;
+    if (canvas.clientWidth === bg.w && Math.abs(canvas.clientHeight - bg.h) < 160) return;
+    bg.state = null;
+    syncBackground(currentSettings());
+  }, 200);
 });
 
 syncBackground(currentSettings());

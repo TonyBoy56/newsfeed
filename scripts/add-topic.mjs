@@ -7,7 +7,12 @@
 // "[New topic]". Issue fields:
 //   Topic name, Description, Subtopics (comma separated),
 //   Sources (one per line, optionally "URL | Subtopic"),
-//   Concepts (one per line: "label" or "label: term, term").
+//   Concepts (one per line: "label" or "label: term, term"),
+//   Starting point (optional: the name of an entry in site/topic-catalog.js).
+//
+// A starting point only ever selects from our own catalog file: its sources
+// are trusted and added as-is, and its subtopics keep their tuned keywords.
+// Anything else in the issue is treated as untrusted input.
 //
 // From your computer, write the same fields to a file and run:
 //   ISSUE_BODY="$(cat topic.md)" node scripts/add-topic.mjs --from-issue
@@ -17,13 +22,14 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseXmlFeed, registerCustomConcepts, CONCEPT_SETS, truncate } from './lib/parse.mjs';
 import { discoverFeed, flattenCategories, rankCategories, mdSafe } from './add-source.mjs';
+import { CATALOG } from '../site/topic-catalog.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const FEEDS_FILE = resolve(ROOT, process.env.FEEDS_FILE || 'feeds.json');
 const RESULT_FILE = process.env.RESULT_FILE ? resolve(process.env.RESULT_FILE) : null;
 const COMMIT_FILE = process.env.COMMIT_FILE ? resolve(process.env.COMMIT_FILE) : null;
 
-const MAX_SOURCES = 15;
+const MAX_SOURCES = 25;
 
 export function parseTopicIssue(body = '') {
   const fields = {};
@@ -36,6 +42,7 @@ export function parseTopicIssue(body = '') {
   const lines = (text) => text.split('\n').map((l) => l.replace(/^[-*]\s*/, '').trim()).filter(Boolean);
   return {
     name: pick('topic name').split('\n')[0].trim(),
+    start: pick('starting point').split('\n')[0].trim(),
     description: pick('description').split('\n')[0].trim(),
     subtopics: pick('subtopic').split(/[,\n]/).map((s) => s.trim()).filter(Boolean),
     sources: lines(pick('source')).map((l) => {
@@ -52,22 +59,36 @@ export function parseTopicIssue(body = '') {
 
 export const slug = (s) => String(s).toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'topic';
 
-export function buildSection(input, config) {
+export const catalogEntry = (name) => CATALOG.find((e) => e.name.toLowerCase() === String(name || '').trim().toLowerCase()) || null;
+
+export function buildSection(input, config, entry = null) {
   const name = truncate(input.name.replace(/[\r\n]/g, ' ').trim(), 40);
   if (!name) throw new Error('The topic needs a name.');
   const existing = new Set((config.sections || []).map((s) => s.id));
   if ((config.sections || []).some((s) => s.name.toLowerCase() === name.toLowerCase())) throw new Error(`There is already a topic called "${name}".`);
-  let id = slug(name);
+  // A built-in starting point keeps its id, so its concept map applies.
+  let id = entry?.builtin && !existing.has(entry.builtin) ? entry.builtin : slug(name);
   for (let n = 2; existing.has(id); n++) id = `${slug(name)}-${n}`;
+  const usedCats = new Set(flattenCategories(config).map((c) => c.id));
   const subNames = [...new Set(input.subtopics.map((s) => truncate(s, 40)))].slice(0, 8);
-  const categories = (subNames.length ? subNames : ['General']).map((sub) => ({
-    id: `${id}-${slug(sub)}`,
-    name: sub,
-    description: '',
-    keywords: sub.toLowerCase(),
-    feeds: [],
-  }));
-  return { id, name, description: truncate(input.description || '', 160), concepts: input.concepts, categories };
+  const categories = (subNames.length ? subNames : ['General']).map((sub) => {
+    const tuned = entry?.subtopicDetails?.[sub];
+    let catId = tuned?.id && !usedCats.has(tuned.id) ? tuned.id : `${id}-${slug(sub)}`;
+    for (let n = 2; usedCats.has(catId); n++) catId = `${id}-${slug(sub)}-${n}`;
+    usedCats.add(catId);
+    return {
+      id: catId,
+      name: sub,
+      description: tuned?.description || '',
+      keywords: tuned?.keywords || sub.toLowerCase(),
+      ...(tuned?.maxAgeDays ? { maxAgeDays: tuned.maxAgeDays } : {}),
+      feeds: [],
+    };
+  });
+  const section = { id, name, description: truncate(input.description || '', 160), categories };
+  // Built-in concept maps come from concept-graph.js; custom topics bring their own.
+  if (!(entry?.builtin && id === entry.builtin)) section.concepts = input.concepts;
+  return section;
 }
 
 async function main() {
@@ -75,7 +96,8 @@ async function main() {
   const input = parseTopicIssue(process.env.ISSUE_BODY);
   const config = JSON.parse(await readFile(FEEDS_FILE, 'utf8'));
   config.sections ??= [];
-  const section = buildSection(input, config);
+  const entry = catalogEntry(input.start);
+  const section = buildSection(input, config, entry);
   config.sections.push(section);
   registerCustomConcepts(config);
 
@@ -90,7 +112,18 @@ async function main() {
   };
   const added = [];
   const skipped = [];
+  const findCat = (name) => section.categories.find((c) => c.name.toLowerCase() === String(name).toLowerCase());
   for (const src of input.sources.slice(0, MAX_SOURCES)) {
+    // Straight from our own catalog: already vetted, so add it as-is.
+    const known0 = entry?.sources.find((s) => s.url === src.url);
+    if (known0 && !known.has(known0.url.toLowerCase())) {
+      const cat = findCat(src.subtopic) || findCat(known0.subtopic) || section.categories[0];
+      const name = uniqueName(known0.name);
+      cat.feeds.push({ name, url: known0.url, site: known0.site || new URL(known0.url).origin, ...(known0.type ? { type: known0.type } : {}) });
+      known.add(known0.url.toLowerCase());
+      added.push(`- **${mdSafe(name, 80)}** → ${mdSafe(cat.name, 40)}`);
+      continue;
+    }
     try {
       const { feedUrl, xml, meta } = await discoverFeed(src.url);
       if (known.has(feedUrl.toLowerCase())) throw new Error('already in your feed');
@@ -121,7 +154,7 @@ async function main() {
     ...added,
     ...(skipped.length ? ['', 'Skipped:', ...skipped] : []),
     '',
-    `Next: open **Your interests** in the app and pick what you want from ${mdSafe(section.name, 40)}. Until you do, the topic stays empty. The site is rebuilding now.`,
+    `The site is rebuilding now, so ${mdSafe(section.name, 40)} should appear in the app in about 2 minutes. Signal opens **Your interests** for it as soon as it lands; until you pick some, the topic stays empty.`,
   ].join('\n');
   console.log(summary);
   if (RESULT_FILE) await writeFile(RESULT_FILE, summary);

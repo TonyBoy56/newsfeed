@@ -24,8 +24,8 @@
 
   const DEFAULTS = {
     preset: 'lagoon', custom: '#0f766e', mode: 'auto', tint: 'tinted', size: 'm', density: 'comfy', corners: 'round',
-    // Background animation ("vibe") shown in the empty space on desktop. See ambient.js.
-    vibe: 'aurora', vibeIntensity: 'medium', vibeSpeed: 'normal', vibePlace: 'side', layoutWidth: 'full',
+    // Background animation ("vibe"): in the empty space on desktop, behind the page on phones. See ambient.js.
+    vibe: 'aurora', vibeIntensity: 'medium', vibeSpeed: 'normal', vibePlace: 'side', vibeMobile: 'on', layoutWidth: 'full',
   };
   const OPTIONS = {
     mode: ['auto', 'light', 'dark'],
@@ -39,6 +39,7 @@
     vibeIntensity: ['subtle', 'medium', 'vivid'],
     vibeSpeed: ['slow', 'normal', 'fast'],
     vibePlace: ['side', 'full'],
+    vibeMobile: ['on', 'off'],
     layoutWidth: ['full', 'roomy'],
   };
 
