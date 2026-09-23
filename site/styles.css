@@ -420,3 +420,24 @@ html[data-density="compact"] .summary {
 .check-list label { cursor: pointer; font-size: 14px; }
 .form textarea { width: 100%; min-height: 80px; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-sm); padding: 8px 12px; resize: vertical; }
 .form details .field { margin-top: 10px; }
+
+/* ---------- Background vibe (ambient.js) ---------- */
+#ambient { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; pointer-events: none; }
+#ambient[hidden] { display: none; }
+/* "Right side": fade the animation in from the middle of the screen. */
+html[data-vibe-place="side"] #ambient {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, transparent 38%, #000 78%);
+  mask-image: linear-gradient(90deg, transparent 0, transparent 38%, #000 78%);
+}
+.shell { position: relative; z-index: 1; }
+body { background: var(--bg); }
+.toolbar { background: color-mix(in srgb, var(--bg) 80%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+/* "Leave room": narrower reading column on wide screens, so the vibe has space. */
+@media (min-width: 1300px) {
+  html[data-width="roomy"] .main { max-width: min(1180px, 66vw); }
+}
+.vibes { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; margin-bottom: 8px; }
+.swatch.vibe .vibe-canvas { display: block; width: 100%; height: 74px; background: var(--bg); }
+.swatch.vibe .label { align-items: flex-start; }
+.swatch.vibe .label small { display: block; font-weight: 400; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+dialog { width: min(720px, calc(100vw - 32px)); }

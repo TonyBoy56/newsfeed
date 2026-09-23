@@ -146,6 +146,23 @@ Suggestions come from `site/topic-catalog.js`. Add your own entries there.
 
 Click **◐** in the toolbar, **Appearance** in the sidebar, or press `t`. Pick a palette, or choose any color for "Your color". Every palette is generated from a single hue, then adjusted until all text meets WCAG AA contrast (4.5:1), so even bright yellow stays readable. Your choice is saved in this browser and applies before the page draws, so there's no flash of the default theme.
 
+### Background vibes
+
+On desktop, an animation can fill the empty space around your articles, drawn in your theme colors. Choose one in **Appearance → Background vibe**; each has a live preview.
+
+| Vibe | Mood |
+|---|---|
+| Aurora | Calm, drifting light |
+| Constellation | Connected nodes that reach toward your cursor |
+| Code rain | Hacker-movie energy |
+| Synthwave | Retro neon sun and grid |
+| Waveform | Oscilloscope and equalizer |
+| Starfield | Warp-speed focus |
+| Lo-fi rain | Rainy window, study session |
+| Fireflies | Warm summer night |
+
+You can also set intensity, speed, and placement: **Right side** fades in away from what you read, or **Everywhere**. **Page width → Leave room** narrows the reading area on wide screens so the vibe has space. It's off on phones and pauses when the tab is hidden. If your system asks for reduced motion, it shows a still frame instead. The code is in `site/ambient.js`, with one small function per scene, so it's easy to add your own.
+
 ## Customize your sources by hand
 
 Edit `feeds.json`. It's organized as **sections** (Security, Music, Games), each with **categories**, and each category has a list of feeds:
@@ -220,6 +237,7 @@ site/                        the reader (plain HTML, CSS, JS; no build step)
 site/theme.js                palette generator with contrast checks
 site/concept-graph.js        the concept map behind "only related articles"
 site/topic-catalog.js        suggested sources for new topics
+site/ambient.js              background vibe animations
 test/                        parser and security tests (npm test)
 .github/workflows/           scheduled fetch + deploy, and PR checks
 ```

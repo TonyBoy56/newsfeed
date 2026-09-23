@@ -22,13 +22,22 @@
     graphite: { name: 'Graphite', hue: 215, sat: 10 },
   };
 
-  const DEFAULTS = { preset: 'lagoon', custom: '#0f766e', mode: 'auto', tint: 'tinted', size: 'm', density: 'comfy', corners: 'round' };
+  const DEFAULTS = {
+    preset: 'lagoon', custom: '#0f766e', mode: 'auto', tint: 'tinted', size: 'm', density: 'comfy', corners: 'round',
+    // Background animation ("vibe") shown in the empty space on desktop. See ambient.js.
+    vibe: 'aurora', vibeIntensity: 'medium', vibeSpeed: 'normal', vibePlace: 'side', layoutWidth: 'full',
+  };
   const OPTIONS = {
     mode: ['auto', 'light', 'dark'],
     tint: ['tinted', 'neutral'],
     size: ['s', 'm', 'l'],
     density: ['comfy', 'compact'],
     corners: ['square', 'soft', 'round'],
+    vibe: ['off', 'aurora', 'constellation', 'coderain', 'synthwave', 'waveform', 'starfield', 'lofi', 'fireflies'],
+    vibeIntensity: ['subtle', 'medium', 'vivid'],
+    vibeSpeed: ['slow', 'normal', 'fast'],
+    vibePlace: ['side', 'full'],
+    layoutWidth: ['full', 'roomy'],
   };
 
   // ---------- color math ----------
@@ -158,6 +167,10 @@
     root.dataset.size = current.size;
     root.dataset.density = current.density;
     root.dataset.corners = current.corners;
+    root.dataset.vibePlace = current.vibePlace;
+    root.dataset.width = current.layoutWidth;
+    // Tell the background animation to pick up the new colors and settings.
+    document.dispatchEvent(new CustomEvent('signal-theme', { detail: current }));
     return current;
   }
 

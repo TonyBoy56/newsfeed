@@ -9,8 +9,9 @@
 // * Your reading history, saves and notes live only in this browser's
 //   localStorage. Nothing is sent anywhere.
 
-import { GRAPH } from './concept-graph.js?v=7';
-import { CATALOG, suggestTopics } from './topic-catalog.js?v=7';
+import { GRAPH } from './concept-graph.js?v=8';
+import { CATALOG, suggestTopics } from './topic-catalog.js?v=8';
+import { VIBES, VibeRunner } from './ambient.js?v=8';
 
 const STORE_KEY = 'signal:v1';
 // theme.js loads first (see index.html) and applies your saved colors.
@@ -1011,9 +1012,17 @@ function setAppearance(patch) {
   persist();
 }
 
+let appearancePreviews = [];
+let renderRef = () => {};
+function stopPreviews() { appearancePreviews.forEach((r) => r.stop()); appearancePreviews = []; }
+
 function showAppearance() {
   const body = h('div', {});
+  let previews = [];
   const render = () => {
+    const scrollTop = $('#dialog-body').scrollTop;
+    stopPreviews();
+    previews = [];
     const a = store.prefs.appearance;
     const dark = Theme.isDark(a);
     const swatch = (id, label, colors) => {
@@ -1027,18 +1036,18 @@ function showAppearance() {
       mini.children[2].style.background = colors.accent;
       return h('button', {
         type: 'button', class: 'swatch', role: 'radio', 'aria-checked': String(selected), 'aria-label': `${label} theme`,
-        onclick: () => { setAppearance({ preset: id }); render(); },
+        onclick: () => { setAppearance({ preset: id }); renderRef(); },
       }, mini, h('div', { class: 'label' }, h('span', {}, label), selected ? h('span', { class: 'check' }, '✓') : null));
     };
     const seg = (key, options) => h('div', { class: 'seg', role: 'radiogroup' }, ...options.map(([value, label]) =>
-      h('button', { type: 'button', role: 'radio', 'aria-checked': String(a[key] === value), onclick: () => { setAppearance({ [key]: value }); render(); } }, label)));
+      h('button', { type: 'button', role: 'radio', 'aria-checked': String(a[key] === value), onclick: () => { setAppearance({ [key]: value }); renderRef(); } }, label)));
     const row = (label, hint, control) => h('div', { class: 'setting-row' },
       h('span', { class: 'setting-label' }, label, hint ? h('span', { class: 'setting-hint' }, hint) : null), control);
 
     const picker = h('input', { type: 'color', 'aria-label': 'Pick your own color' });
     picker.value = a.custom;
     picker.addEventListener('input', () => { setAppearance({ preset: 'custom', custom: picker.value }); });
-    picker.addEventListener('change', render);
+    picker.addEventListener('change', () => renderRef());
 
     put(body,
       h('p', {}, 'Pick a palette and it applies right away. Every theme is tuned so text stays easy to read in both light and dark mode.'),
@@ -1052,12 +1061,40 @@ function showAppearance() {
       row('Text size', null, seg('size', [['s', 'Small'], ['m', 'Medium'], ['l', 'Large']])),
       row('Layout', 'Compact fits more articles on screen', seg('density', [['comfy', 'Comfortable'], ['compact', 'Compact']])),
       row('Corners', null, seg('corners', [['square', 'Square'], ['soft', 'Soft'], ['round', 'Round']])),
+      h('h3', {}, 'Background vibe'),
+      h('p', {}, 'An animation in the empty space around your articles, in your theme colors. Desktop only, and it pauses when the tab is hidden.'),
+      h('div', { class: 'vibes', role: 'radiogroup', 'aria-label': 'Background vibe' }, ...VIBES.map((v) => {
+        const selected = a.vibe === v.id;
+        const canvas = h('canvas', { class: 'vibe-canvas', 'aria-hidden': 'true' });
+        if (v.id !== 'off') previews.push([canvas, v.id]);
+        return h('button', {
+          type: 'button', class: 'swatch vibe', role: 'radio', 'aria-checked': String(selected), 'aria-label': `${v.name}: ${v.mood}`,
+          onclick: () => { setAppearance({ vibe: v.id }); renderRef(); },
+        }, canvas, h('div', { class: 'label' }, h('span', {}, v.name, h('small', {}, v.mood)), selected ? h('span', { class: 'check' }, '✓') : null));
+      })),
+      row('Intensity', 'Subtle keeps it in the background', seg('vibeIntensity', [['subtle', 'Subtle'], ['medium', 'Medium'], ['vivid', 'Vivid']])),
+      row('Speed', null, seg('vibeSpeed', [['slow', 'Slow'], ['normal', 'Normal'], ['fast', 'Fast']])),
+      row('Where', 'Right side keeps it away from what you read', seg('vibePlace', [['side', 'Right side'], ['full', 'Everywhere']])),
+      row('Page width', 'Leave room on the right for the vibe on wide screens', seg('layoutWidth', [['full', 'Full width'], ['roomy', 'Leave room']])),
       h('div', { class: 'btn-row' },
-        h('button', { type: 'button', class: 'btn', onclick: () => { setAppearance(Theme.DEFAULTS); render(); toast('Back to the default look'); } }, 'Reset to default')),
+        h('button', { type: 'button', class: 'btn', onclick: () => { setAppearance(Theme.DEFAULTS); renderRef(); toast('Back to the default look'); } }, 'Reset to default')),
     );
+    $('#dialog-body').scrollTop = scrollTop;
   };
-  render();
+  const startPreviews = () => {
+    // Tiny live previews, only while this dialog is open.
+    appearancePreviews = previews.map(([canvas, id]) => {
+      const r = new VibeRunner(canvas);
+      r.set(id, { ...store.prefs.appearance, vibeIntensity: 'vivid' });
+      return r;
+    });
+  };
+  const origRender = render;
+  const renderAll = () => { origRender(); requestAnimationFrame(startPreviews); };
+  renderRef = renderAll;
+  renderAll();
   openDialog('Appearance', body);
+  $('#dialog').addEventListener('close', stopPreviews, { once: true });
 }
 
 // ---------- Your interests ----------
